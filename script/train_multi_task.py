@@ -5,8 +5,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 
 from da_multitask.data_generator.classification_data_gen import BasicArrayDataset, ResampleArrayDataset
-from da_multitask.flow.model_loop import TrainFlow
-from da_multitask.flow.torch_callbacks import TorchModelCheckpoint, TorchEarlyStop
+from da_multitask.flow.model_loop import train_loop, test_loop
 from da_multitask.networks.complete_model import CompleteModel
 from da_multitask.networks.backbone import TCN
 from da_multitask.networks.classifier import FCClassifier
@@ -21,7 +20,8 @@ def load_data(folder: str):
     Returns:
 
     """
-    train_dict = {0: [], 1: []}
+    train_dict_1 = {0: [], 1: []}
+    train_dict_2 = {i: [] for i in range(21)} # 21 ADL classes of KFall dataset
     valid_dict = {0: [], 1: []}
 
     files = glob(f'{folder}/D1/*.npy')
@@ -74,17 +74,10 @@ if __name__ == '__main__':
     # create training config
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
-    flow = TrainFlow(
-        model=model, loss_fn=loss_fn, optimizer=optimizer,
-        callbacks=[
-            TorchModelCheckpoint('./draft/single_task.pth'),
-            TorchEarlyStop(10)
-        ]
-    )
 
     epochs = 10
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
-        flow.train_loop(train_loader)
-        flow.valid_loop(valid_loader)
+        train_loop(train_loader, model, loss_fn, optimizer)
+        test_loop(valid_loader, model, loss_fn)
     print("Done!")

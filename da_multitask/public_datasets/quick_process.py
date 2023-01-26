@@ -345,7 +345,91 @@ class Museir(QuickProcess):
         np.save(f'{self.destination_folder}/Museir_adl.npy', all_adl_windows)
 
 
+class UCISmartphone(QuickProcess):
+    def __init__(self, raw_folder: str,
+                 name: str, destination_folder: str, signal_freq: float = 50., window_size_sec: float = 4):
+        super().__init__(name, destination_folder, signal_freq, window_size_sec)
+        self.raw_folder = raw_folder
+
+    def _read_label_file(self, path: str):
+        """
+
+        Args:
+            path:
+
+        Returns:
+
+        """
+        df = pd.read_csv(path, header=None, sep=' ')
+        df.columns = ['exp', 'user', 'activity_id', 'start_idx', 'end_idx']
+
+        # change start and end idx if signal freq is not 50Hz (0.05 sample/msec)
+        if self.signal_freq != 0.05:
+            df[['start_idx', 'end_idx']] = (df[['start_idx', 'end_idx']] / 0.05 * self.signal_freq).round().astype(int)
+
+        return df
+
+    def _read_data_file(self, path: str):
+        """
+
+        Args:
+            path:
+
+        Returns:
+
+        """
+        df = pd.read_csv(path, header=None, sep=' ')
+        df.columns = ['acc_x', 'acc_y', 'acc_z']
+        # this dataset is 50Hz (interval 20 msec)
+        df['msec'] = np.arange(len(df)) * 20
+        # resample if the requirement is not 50Hz (0.05 sample/msec)
+        if self.signal_freq != 0.05:
+            df = self._resample(df, timestamp_col='msec')
+
+        df = df[['msec', 'acc_x', 'acc_y', 'acc_z']]
+        return df
+
+    def _get_session_info(self, data_file_name: str) -> tuple:
+        """
+
+        Args:
+            data_file_name:
+
+        Returns:
+
+        """
+        match = re.match(f'acc_exp([0-9][0-9])_user([0-9][0-9]).txt', data_file_name)
+        exp_id = match.group(1)
+        user_id = match.group(2)
+        return exp_id, user_id
+
+    def run(self):
+        accel_files = sorted(glob(f'{self.raw_folder}/acc_*.txt'))
+        all_label_df = self._read_label_file(f'{self.raw_folder}/labels.txt')
+
+        all_windows = []
+        for file in accel_files:
+            data_df = self._read_data_file(file)
+
+            # remove rows that are not in labelled range
+            exp_id, user_id = self._get_session_info(file.split('/')[-1])
+            label_df = all_label_df.loc[
+                (all_label_df['exp'] == int(exp_id)) & (all_label_df['user'] == int(user_id))]
+            first_idx = label_df['start_idx'].iat[0]
+            last_idx = label_df['end_idx'].iat[-1]
+            data_arr = data_df.to_numpy()[first_idx:last_idx + 1]
+
+            # sliding window
+            data_arr = sliding_window(data_arr, window_size=self.window_size_row, step_size=self.window_size_row // 2)
+            all_windows.append(data_arr)
+
+        all_windows = np.concatenate(all_windows)
+        print(all_windows.shape)
+        os.makedirs(self.destination_folder, exist_ok=True)
+        np.save(f'{self.destination_folder}/{self.name}_adl.npy', all_windows)
+
 if __name__ == '__main__':
+    pass
     # URFallProcess(
     #     raw_csv_folder='/mnt/data_drive/projects/datasets/UR Fall/raw/accelerometer/',
     #     name='URFall',
@@ -353,16 +437,21 @@ if __name__ == '__main__':
     #     signal_freq=50, window_size_sec=4
     # ).run()
     #
-    KFall(
-        raw_folder='/mnt/data_drive/projects/datasets/KFall/',
-        name='KFall',
-        destination_folder='./draft',
-        signal_freq=50, window_size_sec=4
-    ).run()
-
+    # KFall(
+    #     raw_folder='/mnt/data_drive/projects/datasets/KFall/',
+    #     name='KFall',
+    #     destination_folder='./draft',
+    #     signal_freq=50, window_size_sec=4
+    # ).run()
     # Museir(
     #     processed_folder='/mnt/data_drive/projects/UCD01 - Privacy preserving data collection/data/batch3/processed',
     #     name='Museir',
     #     destination_folder='./draft',
     #     signal_freq=50, window_size_sec=4
     # ).run()
+    UCISmartphone(
+        raw_folder='/mnt/data_drive/projects/datasets/uci-smartphone-based-recognition-of-human-activities/RawData/',
+        name='UCISmartphone',
+        destination_folder='./draft',
+        signal_freq=50, window_size_sec=4
+    )#.run()

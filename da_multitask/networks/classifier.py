@@ -1,3 +1,4 @@
+import torch as tr
 import torch.nn as nn
 
 
@@ -30,6 +31,23 @@ class MultiFCClassifiers(nn.Module):
         for n_c in n_classes:
             self.fcs.append(nn.Linear(n_features, n_c))
 
-    def forward(self, x):
-        output = [fc(x) for fc in self.fcs]
+    def forward(self, x, mask: tr.Tensor):
+        """
+
+        Args:
+            x: input tensor
+            mask: an integer Tensor containing classifier index for each sample in x
+
+        Returns:
+            a tuple, element at index I
+        """
+        output = tuple(self.fcs[i](x[mask == i]) for i in range(len(self.fcs)))
         return output
+
+
+if __name__ == '__main__':
+    model = MultiFCClassifiers(n_features=10, n_classes=[2, 2])
+    data = tr.ones([8, 10])
+    mask = tr.Tensor([0, 1, 1, 1, 1, 1, 1, 1]).bool()
+    output = model(data, mask)
+    print(*output, sep='\n')
