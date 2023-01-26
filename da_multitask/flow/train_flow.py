@@ -6,16 +6,16 @@ from tqdm import tqdm
 from sklearn.metrics import f1_score
 from torch.utils.data import DataLoader
 
-from da_multitask.constants import DEVICE
 from da_multitask.flow.torch_callbacks import TorchCallback, CallbackAction
 
 
 class TrainFlow:
     def __init__(self, model: tr.nn.Module, loss_fn: tr.nn.Module,
-                 optimizer: tr.optim.Optimizer, callbacks: List[TorchCallback] = None):
-        self.model = model
+                 optimizer: tr.optim.Optimizer, device: str, callbacks: List[TorchCallback] = None):
+        self.model = model.to(device)
         self.loss_fn = loss_fn
         self.optimizer = optimizer
+        self.device = device
 
         self.train_log = []
         self.valid_log = []
@@ -32,8 +32,8 @@ class TrainFlow:
 
         pbar = tqdm(total=len(dataloader))
         for batch, (x, y) in enumerate(dataloader):
-            x = x.to(DEVICE)
-            y = y.to(DEVICE)
+            x = x.to(self.device)
+            y = y.to(self.device)
             # Compute prediction and loss
             pred = self.model(x)
             loss = self.loss_fn(pred, y)
@@ -66,15 +66,17 @@ class TrainFlow:
         y_true = []
         y_pred = []
         with tr.no_grad():
-            for X, y in dataloader:
-                pred = self.model(X)
+            for x, y in dataloader:
+                x = x.to(self.device)
+                y = y.to(self.device)
+                pred = self.model(x)
                 valid_loss += self.loss_fn(pred, y).item()
                 y_true.append(y)
                 y_pred.append(pred.argmax(1))
 
         valid_loss /= num_batches
-        y_true = tr.concatenate(y_true).numpy()
-        y_pred = tr.concatenate(y_pred).numpy()
+        y_true = tr.concatenate(y_true).to('cpu')
+        y_pred = tr.concatenate(y_pred).to('cpu')
         metric = self.cal_metric(y_true, y_pred)
 
         # record epoch log
@@ -92,8 +94,8 @@ class TrainFlow:
             # load data
             data = [next(dataloader) for dataloader in dataloaders]
             x, y = tuple(zip(*data))
-            x = tr.concatenate(x).to(DEVICE)
-            y = tr.concatenate(y).to(DEVICE)
+            x = tr.concatenate(x).to(self.device)
+            y = tr.concatenate(y).to(self.device)
 
             # generate task mask
             task_mask = np.concatenate([[task_idx] * len(data_tensor[0]) for task_idx, data_tensor in enumerate(data)])
@@ -125,33 +127,33 @@ class TrainFlow:
         self.train_log.append({'loss': train_loss})
         print(f'Train: {self.train_log[-1]}')
 
-    def run_callbacks(self) -> List[CallbackAction]:
+    def run_callbacks(self, epoch: int) -> List[CallbackAction]:
         actions = [
-            callback.on_epoch_end(self.model, self.train_log[-1]['loss'], self.valid_log[-1]['loss'])
+            callback.on_epoch_end(epoch, self.model, self.train_log[-1]['loss'], self.valid_log[-1]['loss'])
             for callback in self.callbacks
         ]
         return actions
 
-    def run(self, train_loader: Union[DataLoader, List[DataLoader]], valid_loader: DataLoader, epochs: int) -> Tuple[
-            pd.DataFrame, pd.DataFrame]:
+    def run(self, train_loader: Union[DataLoader, List[DataLoader]],
+            valid_loader: DataLoader, num_epochs: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
 
         Args:
             train_loader:
             valid_loader:
-            epochs:
+            num_epochs:
 
         Returns:
 
         """
-        for t in range(epochs):
-            print(f"Epoch {t + 1}\n-------------------------------")
+        for epoch in range(1, num_epochs + 1):
+            print(f"-----------------\nEpoch {epoch}")
             if isinstance(train_loader, DataLoader):
                 self.train_loop(train_loader)
             else:
                 self.multitask_train_loop(train_loader)
             self.valid_loop(valid_loader)
-            callback_actions = self.run_callbacks()
+            callback_actions = self.run_callbacks(epoch)
             if CallbackAction.STOP_TRAINING in callback_actions:
                 break
 

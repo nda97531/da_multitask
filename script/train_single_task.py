@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 from glob import glob
@@ -25,6 +27,7 @@ def load_data(folder: str):
     valid_dict = {0: [], 1: []}
 
     files = glob(f'{folder}/D1/*.npy')
+    print(f'{len(files)} files found')
 
     for file in files:
         arr = np.load(file)[:, :, 1:]
@@ -53,6 +56,12 @@ def load_data(folder: str):
 
 
 if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--device', '-de', default='cpu')
+    args = parser.parse_args()
+
     # create model
     backbone = TCN(
         how_flatten='spatial attention gap',
@@ -67,18 +76,26 @@ if __name__ == '__main__':
     model = CompleteModel(backbone=backbone, classifier=classifier)
 
     # create data loaders
-    train_set, valid_set = load_data('../da_multitask/public_datasets/draft')
+    train_set, valid_set = load_data('../../../npy_data')
     train_loader = DataLoader(train_set, batch_size=16, shuffle=True)
     valid_loader = DataLoader(valid_set, batch_size=16, shuffle=False)
+
+    # create folder to save result
+    save_folder = './draft'
+    last_exp = [int(exp_no.split(os.sep)[-1].split('_')[-1]) for exp_no in glob(f'{save_folder}/exp_*')]
+    last_exp = max(last_exp) + 1 if len(last_exp) > 0 else 0
+    save_folder = f'{save_folder}/exp_{last_exp}'
 
     # create training config
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
+    num_epochs = 3
 
     flow = TrainFlow(
         model=model, loss_fn=loss_fn, optimizer=optimizer,
+        device=args.device,
         callbacks=[
-            ModelCheckpoint('./draft/single_task.pth'),
+            ModelCheckpoint(num_epochs, f'{save_folder}/single_task.pth'),
             EarlyStop(10)
         ]
     )
@@ -86,10 +103,10 @@ if __name__ == '__main__':
     train_log, valid_log = flow.run(
         train_loader=train_loader,
         valid_loader=valid_loader,
-        epochs=2
+        num_epochs=num_epochs
     )
 
-    train_log.to_csv('./draft/train.csv', index=False)
-    valid_log.to_csv('./draft/valid.csv', index=False)
+    train_log.to_csv(f'{save_folder}/train.csv', index=False)
+    valid_log.to_csv(f'{save_folder}/valid.csv', index=False)
 
     print("Done!")
