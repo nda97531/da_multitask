@@ -13,7 +13,7 @@ class TorchCallback:
         raise NotImplementedError()
 
 
-class TorchModelCheckpoint(TorchCallback):
+class ModelCheckpoint(TorchCallback):
     def __init__(self, save_path: str, smaller_better: bool = True, save_best_only=True, save_weights_only=True):
         self.save_path = save_path
         self.smaller_better = smaller_better
@@ -37,7 +37,7 @@ class TorchModelCheckpoint(TorchCallback):
         return CallbackAction.NONE
 
 
-class TorchEarlyStop(TorchCallback):
+class EarlyStop(TorchCallback):
     def __init__(self, patience: int, smaller_better: bool = True):
         self.patience = patience
         self.smaller_better = smaller_better

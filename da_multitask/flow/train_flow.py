@@ -1,5 +1,6 @@
+import pandas as pd
 import numpy as np
-from typing import List
+from typing import List, Union, Tuple
 import torch as tr
 from tqdm import tqdm
 from sklearn.metrics import f1_score
@@ -130,6 +131,34 @@ class TrainFlow:
             for callback in self.callbacks
         ]
         return actions
+
+    def run(self, train_loader: Union[DataLoader, List[DataLoader]], valid_loader: DataLoader, epochs: int) -> Tuple[
+            pd.DataFrame, pd.DataFrame]:
+        """
+
+        Args:
+            train_loader:
+            valid_loader:
+            epochs:
+
+        Returns:
+
+        """
+        for t in range(epochs):
+            print(f"Epoch {t + 1}\n-------------------------------")
+            if isinstance(train_loader, DataLoader):
+                self.train_loop(train_loader)
+            else:
+                self.multitask_train_loop(train_loader)
+            self.valid_loop(valid_loader)
+            callback_actions = self.run_callbacks()
+            if CallbackAction.STOP_TRAINING in callback_actions:
+                break
+
+        train_log = pd.DataFrame(self.train_log)
+        valid_log = pd.DataFrame(self.valid_log)
+        return train_log, valid_log
+
 # if __name__ == '__main__':
 #     import numpy as np
 #     from da_multitask.networks.classifier import MultiFCClassifiers

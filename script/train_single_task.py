@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 
 from da_multitask.data_generator.classification_data_gen import BasicArrayDataset, ResampleArrayDataset
 from da_multitask.flow.train_flow import TrainFlow
-from da_multitask.flow.torch_callbacks import TorchModelCheckpoint, TorchEarlyStop
+from da_multitask.flow.torch_callbacks import ModelCheckpoint, EarlyStop
 from da_multitask.networks.complete_model import CompleteModel
 from da_multitask.networks.backbone import TCN
 from da_multitask.networks.classifier import FCClassifier
@@ -74,18 +74,22 @@ if __name__ == '__main__':
     # create training config
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
+
     flow = TrainFlow(
         model=model, loss_fn=loss_fn, optimizer=optimizer,
         callbacks=[
-            TorchModelCheckpoint('./draft/single_task.pth'),
-            TorchEarlyStop(10)
+            ModelCheckpoint('./draft/single_task.pth'),
+            EarlyStop(10)
         ]
     )
 
-    epochs = 10
-    for t in range(epochs):
-        print(f"Epoch {t + 1}\n-------------------------------")
-        flow.train_loop(train_loader)
-        flow.valid_loop(valid_loader)
-        flow.run_callbacks()
+    train_log, valid_log = flow.run(
+        train_loader=train_loader,
+        valid_loader=valid_loader,
+        epochs=2
+    )
+
+    train_log.to_csv('./draft/train.csv', index=False)
+    valid_log.to_csv('./draft/valid.csv', index=False)
+
     print("Done!")
