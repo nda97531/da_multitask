@@ -14,6 +14,7 @@ class BasicArrayDataset(Dataset):
         for k, v in label_data_dict.items():
             print(k, ':', len(v))
 
+        self.num_classes = len(label_data_dict)
         self.data = []
         self.label = []
         for label, data in label_data_dict.items():
@@ -44,6 +45,7 @@ class ResampleArrayDataset(Dataset):
             shuffle: shuffle data after each epoch
 
         """
+        self.num_classes = len(label_data_dict)
         self.shuffle = shuffle
         # key: label (int); value: data [n, ..., channel]
         self.label_data_dict = label_data_dict

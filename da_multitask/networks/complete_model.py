@@ -9,11 +9,13 @@ class CompleteModel(nn.Module):
         self.classifier = classifier
         self.dropout = nn.Dropout(p=dropout)
 
-    def forward(self, x: tr.Tensor):
+    def forward(self, x: tr.Tensor, backbone_kwargs: dict = {}, classifier_kwargs: dict = {}):
         """
 
         Args:
             x: [batch, ..., channel]
+            backbone_kwargs:
+            classifier_kwargs:
 
         Returns:
 
@@ -21,10 +23,10 @@ class CompleteModel(nn.Module):
         # change to [batch, channel, ...]
         x = tr.permute(x, [0, 2, 1])
 
-        x = self.backbone(x)
+        x = self.backbone(x, **backbone_kwargs)
         # [batch, channel]
         x = self.dropout(x)
-        x = self.classifier(x)
+        x = self.classifier(x, **classifier_kwargs)
         return x
 
 # class MultiTaskModel(nn.Module):

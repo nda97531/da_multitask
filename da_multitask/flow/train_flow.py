@@ -19,9 +19,11 @@ class TrainFlow:
 
         self.train_log = []
         self.valid_log = []
-        self.cal_metric = f1_score
 
         self.callbacks = callbacks
+
+    def cal_metric(self, y_true, y_pred):
+        return f1_score(y_true, y_pred, average='macro')
 
     def train_loop(self, dataloader: DataLoader):
         self.model = self.model.train()
@@ -46,15 +48,68 @@ class TrainFlow:
             # record batch log
             train_loss += loss.item()
             y_true.append(y.to('cpu'))
-            y_pred.append(pred.argmax(1).to('cpu'))
+            y_pred.append(pred.to('cpu'))
 
             pbar.update(1)
         pbar.close()
 
         # record epoch log
         train_loss /= len(dataloader)
-        metric = self.cal_metric(tr.concatenate(y_true), tr.concatenate(y_pred))
+        metric = self.cal_metric(tr.concatenate(y_true), tr.concatenate(y_pred).argmax(1))
         self.train_log.append({'loss': train_loss, 'metric': metric})
+        print(f'Train: {self.train_log[-1]}')
+
+    def multitask_train_loop(self, dataloaders: List[DataLoader]):
+        self.model = self.model.train()
+
+        num_iter = min(len(dataloader) for dataloader in dataloaders)
+        dataloaders = [iter(dataloader) for dataloader in dataloaders]
+
+        # 2-level lists to store y_true and y_pred; level 1: task no.; level 2: y true/pred values
+        y_true = [list() for _ in dataloaders]
+        y_pred = [list() for _ in dataloaders]
+        train_loss = 0
+        for batch in tqdm(range(num_iter)):
+            # load data
+            data = [next(dataloader) for dataloader in dataloaders]
+            x, y = tuple(zip(*data))
+            x = tr.concatenate(x).to(self.device)
+            y = tr.concatenate(y).to(self.device)
+
+            # generate task mask: a 1D array containing a task number for each sample
+            task_mask = np.concatenate([[task_idx] * len(data_tensor[0]) for task_idx, data_tensor in enumerate(data)])
+            task_mask = tr.from_numpy(task_mask)
+
+            # shuffle this batch so that all tasks are distributed evenly
+            shuffle_idx = tr.randperm(len(y))
+            x = x[shuffle_idx]
+            y = y[shuffle_idx]
+            task_mask = task_mask[shuffle_idx]
+
+            # Compute prediction
+            pred = self.model(x, classifier_kwargs={'mask': task_mask})
+            # divide y by mask, the same way pred is divided
+            y = tuple((y[task_mask == i]) for i in range(len(data)))
+            # compute loss
+            loss = sum(self.loss_fn(pred[i], y[i]) for i in range(len(data))) / len(data)
+
+            # Backpropagation
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            # record batch log
+            train_loss += loss.item()
+            for task_no in range(len(data)):
+                y_true[task_no].append(y[task_no].to('cpu'))
+                y_pred[task_no].append(pred[task_no].to('cpu'))
+
+        # record epoch log
+        train_loss /= num_iter
+        y_true = [tr.concatenate(cls) for cls in y_true]
+        y_pred = [tr.concatenate(cls).argmax(1) for cls in y_pred]
+        metrics = [self.cal_metric(y_true[i], y_pred[i]) for i in range(len(y_true))]
+        self.train_log.append({'loss': train_loss} | {f'metric_task_{i}': metrics[i] for i in range(len(metrics))})
         print(f'Train: {self.train_log[-1]}')
 
     def valid_loop(self, dataloader: DataLoader):
@@ -72,60 +127,60 @@ class TrainFlow:
                 pred = self.model(x)
                 valid_loss += self.loss_fn(pred, y).item()
                 y_true.append(y)
-                y_pred.append(pred.argmax(1))
+                y_pred.append(pred)
 
         valid_loss /= num_batches
         y_true = tr.concatenate(y_true).to('cpu')
-        y_pred = tr.concatenate(y_pred).to('cpu')
+        y_pred = tr.concatenate(y_pred).argmax(1).to('cpu')
         metric = self.cal_metric(y_true, y_pred)
 
         # record epoch log
         self.valid_log.append({'loss': valid_loss, 'metric': metric})
         print(f'Valid: {self.valid_log[-1]}')
 
-    def multitask_train_loop(self, dataloaders: List[DataLoader]):
-        self.model = self.model.train()
+    def multitask_valid_loop(self, dataloaders: List[DataLoader]):
+        self.model = self.model.eval()
 
-        num_iter = min(len(dataloader) for dataloader in dataloaders)
-        dataloaders = [iter(dataloader) for dataloader in dataloaders]
+        # list of metric values of all tasks
+        metrics = [list() for _ in dataloaders]
+        valid_loss = 0
+        num_task = 0
 
-        train_loss = 0
-        for batch in tqdm(range(num_iter)):
-            # load data
-            data = [next(dataloader) for dataloader in dataloaders]
-            x, y = tuple(zip(*data))
-            x = tr.concatenate(x).to(self.device)
-            y = tr.concatenate(y).to(self.device)
+        # for each task
+        for i, dataloader in enumerate(dataloaders):
+            if not dataloader:
+                continue
 
-            # generate task mask
-            task_mask = np.concatenate([[task_idx] * len(data_tensor[0]) for task_idx, data_tensor in enumerate(data)])
-            task_mask = tr.from_numpy(task_mask)
+            num_batches = len(dataloader)
+            task_loss = 0
 
-            # mix this batch so that all tasks are distributed evenly
-            mix_idx = tr.randperm(len(y))
-            x = x[mix_idx]
-            y = y[mix_idx]
-            task_mask = task_mask[mix_idx]
+            y_true = []
+            y_pred = []
+            with tr.no_grad():
+                for x, y in dataloader:
+                    x = x.to(self.device)
+                    y = y.to(self.device)
+                    pred = self.model(x, classifier_kwargs={'mask': tr.tensor([i] * len(y))})
+                    pred = pred[i]
+                    task_loss += self.loss_fn(pred, y).item()
+                    y_true.append(y)
+                    y_pred.append(pred)
 
-            # Compute prediction
-            pred = self.model(x, task_mask)
-            # divide y by mask, the same way pred is divided
-            y = tuple((y[task_mask == i]) for i in range(len(data)))
-            # compute loss
-            loss = sum(self.loss_fn(pred[i], y[i]) for i in range(len(data)))
+            # calculate log for one task
+            task_loss /= num_batches
+            y_true = tr.concatenate(y_true).to('cpu')
+            y_pred = tr.concatenate(y_pred).argmax(1).to('cpu')
+            metric = self.cal_metric(y_true, y_pred)
 
-            # Backpropagation
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-
-            # record batch log
-            train_loss += loss.item()
+            # record log for all tasks
+            valid_loss += task_loss
+            num_task += 1
+            metrics[i] = metric
 
         # record epoch log
-        train_loss /= num_iter
-        self.train_log.append({'loss': train_loss})
-        print(f'Train: {self.train_log[-1]}')
+        valid_loss /= num_task
+        self.valid_log.append({'loss': valid_loss} | {f'metric_task_{i}': metrics[i] for i in range(len(metrics))})
+        print(f'Valid: {self.valid_log[-1]}')
 
     def run_callbacks(self, epoch: int) -> List[CallbackAction]:
         actions = [
@@ -134,8 +189,8 @@ class TrainFlow:
         ]
         return actions
 
-    def run(self, train_loader: Union[DataLoader, List[DataLoader]],
-            valid_loader: DataLoader, num_epochs: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def run(self, train_loader: Union[DataLoader, List[DataLoader]], valid_loader: Union[DataLoader, List[DataLoader]],
+            num_epochs: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
 
         Args:
@@ -146,13 +201,21 @@ class TrainFlow:
         Returns:
 
         """
+        assert type(train_loader) is type(valid_loader), 'train_loader and valid_loader must be of the same type'
+        if not isinstance(train_loader, DataLoader):
+            assert len(train_loader) == len(valid_loader), \
+                'number of tasks in train_loader and valid_loader must the same'
+
         for epoch in range(1, num_epochs + 1):
             print(f"-----------------\nEpoch {epoch}")
+
             if isinstance(train_loader, DataLoader):
                 self.train_loop(train_loader)
+                self.valid_loop(valid_loader)
             else:
                 self.multitask_train_loop(train_loader)
-            self.valid_loop(valid_loader)
+                self.multitask_valid_loop(valid_loader)
+
             callback_actions = self.run_callbacks(epoch)
             if CallbackAction.STOP_TRAINING in callback_actions:
                 break
