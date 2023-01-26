@@ -5,7 +5,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 
 from da_multitask.data_generator.classification_data_gen import BasicArrayDataset, ResampleArrayDataset
-from da_multitask.flow.model_loop import TrainFlow
+from da_multitask.flow.train_flow import TrainFlow
 from da_multitask.flow.torch_callbacks import TorchModelCheckpoint, TorchEarlyStop
 from da_multitask.networks.complete_model import CompleteModel
 from da_multitask.networks.backbone import TCN
@@ -87,4 +87,5 @@ if __name__ == '__main__':
         print(f"Epoch {t + 1}\n-------------------------------")
         flow.train_loop(train_loader)
         flow.valid_loop(valid_loader)
+        flow.run_callbacks()
     print("Done!")

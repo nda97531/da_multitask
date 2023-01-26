@@ -1,5 +1,5 @@
 from enum import Enum
-
+import os
 import torch as tr
 
 
@@ -27,6 +27,7 @@ class TorchModelCheckpoint(TorchCallback):
 
         if (self.smaller_better and (new_result < self.current_best_result)) \
                 or ((not self.smaller_better) and (new_result > self.current_best_result)):
+            os.makedirs(os.path.split(self.save_path)[0], exist_ok=True)
             tr.save(model.state_dict() if self.save_weights_only else model, self.save_path.format(new_result))
             print(f"Model improved from {self.current_best_result} to {new_result}. "
                   f"Save model to {self.save_path}.")

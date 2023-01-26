@@ -5,7 +5,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 
 from da_multitask.data_generator.classification_data_gen import BasicArrayDataset, ResampleArrayDataset
-from da_multitask.flow.model_loop import train_loop, test_loop
+from da_multitask.flow.train_flow import train_loop, test_loop
 from da_multitask.networks.complete_model import CompleteModel
 from da_multitask.networks.backbone import TCN
 from da_multitask.networks.classifier import FCClassifier
