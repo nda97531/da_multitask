@@ -3,11 +3,13 @@ import re
 import numpy as np
 from glob import glob
 import pandas as pd
+import polars as pl
 from collections import defaultdict
 from tqdm import tqdm
 
-from da_multitask.utils.dataframe import interpolate_numeric_df
-from da_multitask.utils.sliding_window import sliding_window
+from da_multitask.constant import G_TO_MS2
+from utils.pd_dataframe import interpolate_numeric_df, write_df_file
+from utils.sliding_window import sliding_window
 
 
 class QuickProcess:
@@ -286,65 +288,6 @@ class KFall(QuickProcess):
             np.save(f'{self.destination_folder}/{self.name}_{task_id}.npy', task_data)
 
 
-class Museir(QuickProcess):
-    """
-    This dataset doesn't have fall data, so all are considered ADL
-    """
-
-    def __init__(self, processed_folder: str,
-                 name: str, destination_folder: str, signal_freq: float = 50., window_size_sec: float = 4):
-        super().__init__(name, destination_folder, signal_freq, window_size_sec)
-        self.processed_folder = processed_folder
-
-    def _read_sequence(self, path: str) -> pd.DataFrame:
-        """
-
-        Args:
-            path:
-
-        Returns:
-
-        """
-        df = pd.read_parquet(path, columns=['timestamp', 'acc_x', 'acc_y', 'acc_z'])
-
-        # convert m/s^2 -> g
-        df[['acc_x', 'acc_y', 'acc_z']] /= 9.80665
-
-        # resample
-        df = self._resample(df, timestamp_col='timestamp')
-
-        df['timestamp'] -= df.at[0, 'timestamp']
-        return df
-
-    def _get_windows_from_session(self, df: pd.DataFrame) -> np.ndarray:
-        """
-
-        Args:
-            df:
-
-        Returns:
-
-        """
-
-        windows = sliding_window(df.to_numpy(), window_size=self.window_size_row, step_size=self.window_size_row // 2)
-        return windows
-
-    def run(self):
-        files = sorted(glob(f'{self.processed_folder}/setup_*/Phone_inertia/*.parquet'))
-        all_adl_windows = []
-        for df_file in files:
-            df = self._read_sequence(df_file)
-            windows = self._get_windows_from_session(df)
-            all_adl_windows.append(windows)
-
-        all_adl_windows = np.concatenate(all_adl_windows)
-
-        print(all_adl_windows.shape)
-
-        os.makedirs(self.destination_folder, exist_ok=True)
-        np.save(f'{self.destination_folder}/Museir_adl.npy', all_adl_windows)
-
-
 class UCISmartphone(QuickProcess):
     def __init__(self, raw_folder: str,
                  name: str, destination_folder: str, signal_freq: float = 50., window_size_sec: float = 4):
@@ -428,6 +371,65 @@ class UCISmartphone(QuickProcess):
         os.makedirs(self.destination_folder, exist_ok=True)
         np.save(f'{self.destination_folder}/{self.name}_adl.npy', all_windows)
 
+
+class SFI(QuickProcess):
+    """
+    This dataset is processed differently from the others because it is used as test set.
+    Its label doesn't suit to be a training set.
+    (A long sequence has only 1 label, and fall can be anywhere within. Though peak can be used if needed)
+    """
+
+    def __init__(self, raw_folder: str,
+                 name: str, destination_folder: str, signal_freq: float = 50., window_size_sec: float = 4):
+        super().__init__(name, destination_folder, signal_freq, window_size_sec)
+        self.raw_folder = raw_folder
+        self.pattern = 'sub{subject_id}/{label}/{filename}'
+
+    def _read_sequence(self, excel_file: str) -> pd.DataFrame:
+        """
+
+        Args:
+            excel_file:
+
+        Returns:
+
+        """
+        df = pl.read_excel(excel_file)
+        df = df.select([
+            pl.col('Time').alias('msec'),
+            pl.col('waist Acceleration X (m/s^2)').alias('acc_x'),
+            pl.col('waist Acceleration Y (m/s^2)').alias('acc_y'),
+            pl.col('waist Acceleration Z (m/s^2)').alias('acc_z')
+        ]).with_columns([
+            (pl.col('msec') / 1000).cast(int),
+            pl.col('acc_x') / G_TO_MS2,
+            pl.col('acc_y') / G_TO_MS2,
+            pl.col('acc_z') / G_TO_MS2
+        ]).to_pandas()
+        df = self._resample(df, timestamp_col='msec')
+        return df
+
+    def _write_parquet(self, df: pd.DataFrame, excel_path: str):
+        """
+
+        Args:
+            df:
+            excel_path:
+
+        Returns:
+
+        """
+        child_path = excel_path.removeprefix(self.raw_folder).removesuffix('.xlsx')
+        save_path = f'{self.destination_folder}/{child_path}.parquet'
+        write_df_file(df, save_path)
+
+    def run(self):
+        files = glob(f'{self.raw_folder}/{self.pattern.format(subject_id="*", label="*", filename="*")}')
+        for file in tqdm(files):
+            df = self._read_sequence(file)
+            self._write_parquet(df, file)
+
+
 if __name__ == '__main__':
     pass
     # URFallProcess(
@@ -449,9 +451,16 @@ if __name__ == '__main__':
     #     destination_folder='./draft',
     #     signal_freq=50, window_size_sec=4
     # ).run()
-    UCISmartphone(
-        raw_folder='/mnt/data_drive/projects/datasets/uci-smartphone-based-recognition-of-human-activities/RawData/',
-        name='UCISmartphone',
-        destination_folder='./draft',
-        signal_freq=50, window_size_sec=4
-    )#.run()
+    # UCISmartphone(
+    #     raw_folder='/mnt/data_drive/projects/datasets/uci-smartphone-based-recognition-of-human-activities/RawData/',
+    #     name='UCISmartphone',
+    #     destination_folder='./draft',
+    #     signal_freq=50, window_size_sec=4
+    # )  # .run()
+
+    # SFI(
+    #     raw_folder='/mnt/data_drive/projects/datasets/SFU-IMU Dataset/raw',
+    #     name='SFI',
+    #     destination_folder='/mnt/data_drive/projects/datasets/SFU-IMU Dataset/parquet',
+    #     signal_freq=50  # , window_size_sec=4
+    # ).run()

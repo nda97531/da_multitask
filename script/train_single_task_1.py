@@ -1,6 +1,4 @@
 import os
-import re
-from collections import defaultdict
 
 import torch
 import torch.nn as nn
@@ -13,7 +11,7 @@ from da_multitask.flow.train_flow import TrainFlow
 from da_multitask.flow.torch_callbacks import ModelCheckpoint, EarlyStop
 from da_multitask.networks.complete_model import CompleteModel
 from da_multitask.networks.backbone import TCN
-from da_multitask.networks.classifier import MultiFCClassifiers
+from da_multitask.networks.classifier import FCClassifier
 
 
 def load_data(folder: str):
@@ -25,8 +23,7 @@ def load_data(folder: str):
     Returns:
 
     """
-    train_dict_1 = {0: [], 1: []}
-    train_dict_2 = defaultdict(list)
+    train_dict = {0: [], 1: []}
     valid_dict = {0: [], 1: []}
 
     files = glob(f'{folder}/D*/*.npy')
@@ -38,28 +35,28 @@ def load_data(folder: str):
         valid_idx = np.arange(0, len(arr), 2)
         train_idx = np.setdiff1d(np.arange(len(arr)), valid_idx)
 
-        # if this is D2 dataset, add to
+        # if this is D2 dataset, only add to training set
         if file.split(os.sep)[-2] == 'D2':
-            d2_class = re.search(r'_task([0-9][0-9]).npy$', file).group(1)
-            train_dict_2[d2_class].append(arr)
+            train_dict[0].append(arr)
         # get fall data
         elif file.endswith('_fall.npy'):
-            train_dict_1[1].append(arr[train_idx])
+            train_dict[1].append(arr[train_idx])
             valid_dict[1].append(arr[valid_idx])
         # get all non-fall data
         else:
-            train_dict_1[0].append(arr[train_idx])
+            train_dict[0].append(arr[train_idx])
             valid_dict[0].append(arr[valid_idx])
 
-    train_dict_1 = {key: np.concatenate(value) for key, value in train_dict_1.items()}
-    train_dict_2 = {i: np.concatenate(train_dict_2[key]) for i, key in enumerate(sorted(train_dict_2))}
-    valid_dict = {key: np.concatenate(value) for key, value in valid_dict.items()}
+    assert train_dict.keys() == valid_dict.keys(), 'train and valid mismatch'
 
-    train_set_1 = ResampleArrayDataset(train_dict_1)
-    train_set_2 = ResampleArrayDataset(train_dict_2)
+    for key in train_dict.keys():
+        train_dict[key] = np.concatenate(train_dict[key])
+        valid_dict[key] = np.concatenate(valid_dict[key])
+
+    train_set = ResampleArrayDataset(train_dict)
     valid_set = BasicArrayDataset(valid_dict)
 
-    return [train_set_1, train_set_2], valid_set
+    return train_set, valid_set
 
 
 if __name__ == '__main__':
@@ -69,11 +66,6 @@ if __name__ == '__main__':
     parser.add_argument('--device', '-de', default='cpu')
     args = parser.parse_args()
 
-    # create data loaders
-    train_sets, valid_set = load_data('../../npy_data')
-    train_loaders = [DataLoader(train_set, batch_size=8, shuffle=True) for train_set in train_sets]
-    valid_loader = DataLoader(valid_set, batch_size=16, shuffle=False)
-
     # create model
     backbone = TCN(
         how_flatten='spatial attention gap',
@@ -81,11 +73,16 @@ if __name__ == '__main__':
         tcn_drop_rate=0.5,
         use_spatial_dropout=False
     )
-    classifier = MultiFCClassifiers(
+    classifier = FCClassifier(
         n_features=128,
-        n_classes=[train_set.num_classes for train_set in train_sets]
+        n_classes=2
     )
     model = CompleteModel(backbone=backbone, classifier=classifier)
+
+    # create data loaders
+    train_set, valid_set = load_data('../../npy_data')
+    train_loader = DataLoader(train_set, batch_size=16, shuffle=True)
+    valid_loader = DataLoader(valid_set, batch_size=16, shuffle=False)
 
     # create folder to save result
     save_folder = './draft'
@@ -102,14 +99,14 @@ if __name__ == '__main__':
         model=model, loss_fn=loss_fn, optimizer=optimizer,
         device=args.device,
         callbacks=[
-            ModelCheckpoint(num_epochs, f'{save_folder}/multi_task.pth'),
+            ModelCheckpoint(num_epochs, f'{save_folder}/single_task.pth'),
             # EarlyStop(10)
         ]
     )
 
     train_log, valid_log = flow.run(
-        train_loader=train_loaders,
-        valid_loader=[valid_loader, None],  # only valid the first task
+        train_loader=train_loader,
+        valid_loader=valid_loader,
         num_epochs=num_epochs
     )
 

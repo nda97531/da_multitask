@@ -30,8 +30,9 @@ def load_data(folder: str):
     print(f'{len(files)} files found')
 
     for file in files:
+        print(f'Reading file: {file}')
         arr = np.load(file)[:, :, 1:]
-        valid_idx = np.arange(0, len(arr), 4)
+        valid_idx = np.arange(0, len(arr), 2)
         train_idx = np.setdiff1d(np.arange(len(arr)), valid_idx)
 
         # get fall data
@@ -76,7 +77,7 @@ if __name__ == '__main__':
     model = CompleteModel(backbone=backbone, classifier=classifier)
 
     # create data loaders
-    train_set, valid_set = load_data('../../../npy_data')
+    train_set, valid_set = load_data('../../npy_data')
     train_loader = DataLoader(train_set, batch_size=16, shuffle=True)
     valid_loader = DataLoader(valid_set, batch_size=16, shuffle=False)
 
@@ -88,15 +89,15 @@ if __name__ == '__main__':
 
     # create training config
     loss_fn = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
-    num_epochs = 3
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+    num_epochs = 40
 
     flow = TrainFlow(
         model=model, loss_fn=loss_fn, optimizer=optimizer,
         device=args.device,
         callbacks=[
             ModelCheckpoint(num_epochs, f'{save_folder}/single_task.pth'),
-            EarlyStop(10)
+            # EarlyStop(10)
         ]
     )
 
