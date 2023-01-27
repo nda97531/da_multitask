@@ -139,6 +139,14 @@ class TrainFlow:
         print(f'Valid: {self.valid_log[-1]}')
 
     def multitask_valid_loop(self, dataloaders: List[DataLoader]):
+        """
+
+        Args:
+            dataloaders:
+
+        Returns:
+
+        """
         self.model = self.model.eval()
 
         # list of metric values of all tasks
