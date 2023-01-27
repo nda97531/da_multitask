@@ -35,8 +35,9 @@ def load_single_task_model(weight_path: str, device: str = 'cpu') -> nn.Module:
     model = CompleteModel(backbone=backbone, classifier=classifier).to(device)
 
     # load weight
-    state_dict = tr.load(weight_path).to(device)
+    state_dict = tr.load(weight_path)
     model.load_state_dict(state_dict)
+    return model
 
 
 def load_multitask_model(weight_path: str, device: str = 'cpu') -> nn.Module:
@@ -63,9 +64,8 @@ def load_multitask_model(weight_path: str, device: str = 'cpu') -> nn.Module:
     model = CompleteModel(backbone=backbone, classifier=classifier).to(device)
 
     # load weight
-    state_dict = tr.load(weight_path).to(device)
+    state_dict = tr.load(weight_path)
     model.load_state_dict(state_dict)
-
     return model
 
 
@@ -107,7 +107,7 @@ def test_single_task(model: nn.Module, list_data_files: list, device: str = 'cpu
             y_true.append(label)
             y_pred.append(pred)
 
-    print(classification_report(y_true, y_pred))
+    print(classification_report(y_true, y_pred, digits=4))
 
 
 def test_multitask(model: nn.Module, list_data_files: list, device: str = 'cpu'):
@@ -121,30 +121,41 @@ def test_multitask(model: nn.Module, list_data_files: list, device: str = 'cpu')
             label = get_label_from_file_path(file)
 
             # only use the first task (index 0)
-            pred = model(data, mask=tr.zeros(len(data), dtype=int))[0]
+            pred = model(
+                data,
+                classifier_kwargs={'mask': tr.zeros(len(data), dtype=int)}
+            )[0]
             # predict fall (positive-1) if there's any positive window
             pred = pred.argmax(1).any().item()
 
             y_true.append(label)
             y_pred.append(pred)
 
-    print(classification_report(y_true, y_pred))
+    print(classification_report(y_true, y_pred, digits=4))
 
 
 if __name__ == '__main__':
-    list_data_files = glob('/mnt/data_drive/projects/datasets/SFU-IMU Dataset/parquet/sub*/*/*.parquet')
-    weight_path_pattern = '/mnt/data_drive/projects/other code/da_multitask/draft/exp_{}/single_task_last_epoch.pth'
+    device = 'cuda:0'
 
-    # test model 0: single task, train on D1
-    model_0 = load_single_task_model(weight_path=weight_path_pattern.format(0), device='cpu')
+    list_data_files = glob('/home/ducanh/projects/datasets/SFU/parquet/sub*/*/*.parquet')
+    weight_path_pattern = 'draft/exp_{}/{}_task_last_epoch.pth'
+
+    print('test model 0: single task, train on D1')
+    model_0 = load_single_task_model(weight_path=weight_path_pattern.format(0, 'single'), device=device)
     test_single_task(model_0, list_data_files)
     del model_0
 
-    # test model 1: single task, train on D1+D2
-    model_1 = load_single_task_model(weight_path=weight_path_pattern.format(1), device='cpu')
+    print('test model 1: single task, train on D1+D2')
+    model_1 = load_single_task_model(weight_path=weight_path_pattern.format(1, 'single'), device=device)
     test_single_task(model_1, list_data_files)
     del model_1
 
-    # test model 2: multitask, train on D1 and D2
-    model_2 = load_multitask_model(weight_path=weight_path_pattern.format(2), device='cpu')
+    print('test model 2: multitask, train on D1 and D2')
+    model_2 = load_multitask_model(weight_path=weight_path_pattern.format(2, 'multi'), device=device)
     test_multitask(model_2, list_data_files)
+    del model_2
+
+    print('test model 3: multitask, train on D1 and D2 and D1+D2')
+    model_3 = load_multitask_model(weight_path=weight_path_pattern.format(3, 'multi'), device=device)
+    test_multitask(model_3, list_data_files)
+    del model_3
