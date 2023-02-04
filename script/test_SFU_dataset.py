@@ -40,7 +40,7 @@ def load_single_task_model(weight_path: str, device: str = 'cpu') -> nn.Module:
     return model
 
 
-def load_multitask_model(weight_path: str, device: str = 'cpu') -> nn.Module:
+def load_multitask_model(weight_path: str, n_classes: list, device: str = 'cpu') -> nn.Module:
     """
 
     Args:
@@ -59,7 +59,7 @@ def load_multitask_model(weight_path: str, device: str = 'cpu') -> nn.Module:
     )
     classifier = MultiFCClassifiers(
         n_features=128,
-        n_classes=[2, 21]
+        n_classes=n_classes
     )
     model = CompleteModel(backbone=backbone, classifier=classifier).to(device)
 
@@ -87,7 +87,7 @@ def get_label_from_file_path(path: str) -> int:
 
     """
     label = path.split(os.sep)[-2]
-    label = (label == 'Falls')
+    label = int(label == 'Falls')
     return label
 
 
@@ -138,24 +138,50 @@ if __name__ == '__main__':
     device = 'cuda:0'
 
     list_data_files = glob('/home/ducanh/projects/datasets/SFU/parquet/sub*/*/*.parquet')
-    weight_path_pattern = 'draft/exp_{}/{}_task_last_epoch.pth'
+    # weight_path_pattern = 'draft/exp_{}/{}_task_last_epoch.pth'
+    weight_path_pattern = 'draft/exp_{}/{}_task.pth'
 
-    print('test model 0: single task, train on D1')
-    model_0 = load_single_task_model(weight_path=weight_path_pattern.format(0, 'single'), device=device)
-    test_single_task(model_0, list_data_files)
-    del model_0
+    print('test model 6: multitask, data D1 (2 classes of D1) and D1fall+D2 (2 classes of D1)')
+    model_6 = load_multitask_model(weight_path=weight_path_pattern.format(6, 'multi'),
+                                   n_classes=[2, 2],
+                                   device=device)
+    test_multitask(model_6, list_data_files)
+    del model_6
 
-    print('test model 1: single task, train on D1+D2')
+    print('test model 5: multitask, data D1 (2 classes of D1) and D1fall+D2 (22 classes of D1+D2)')
+    model_5 = load_multitask_model(weight_path=weight_path_pattern.format(5, 'multi'),
+                                   n_classes=[2, 22],
+                                   device=device)
+    test_multitask(model_5, list_data_files)
+    del model_5
+
+    print('test model 4: multitask, data D1+D2 (2 classes of D1) and D1+D2 (23 classes of D1+D2)')
+    model_4 = load_multitask_model(weight_path=weight_path_pattern.format(4, 'multi'),
+                                   n_classes=[2, 23],
+                                   device=device)
+    test_multitask(model_4, list_data_files)
+    del model_4
+
+    print('test model 3: multitask, data D1+D2 (2 classes of D1) and D2 (21 classes of D2)')
+    model_3 = load_multitask_model(weight_path=weight_path_pattern.format(3, 'multi'),
+                                   n_classes=[2, 21],
+                                   device=device)
+    test_multitask(model_3, list_data_files)
+    del model_3
+
+    print('test model 2: multitask, data D1 (2 classes of D1) and D2 (21 classes of D2)')
+    model_2 = load_multitask_model(weight_path=weight_path_pattern.format(2, 'multi'),
+                                   n_classes=[2, 21],
+                                   device=device)
+    test_multitask(model_2, list_data_files)
+    del model_2
+
+    print('test model 1: single task, data D1+D2, 2 classes of D1')
     model_1 = load_single_task_model(weight_path=weight_path_pattern.format(1, 'single'), device=device)
     test_single_task(model_1, list_data_files)
     del model_1
 
-    print('test model 2: multitask, train on D1 and D2')
-    model_2 = load_multitask_model(weight_path=weight_path_pattern.format(2, 'multi'), device=device)
-    test_multitask(model_2, list_data_files)
-    del model_2
-
-    print('test model 3: multitask, train on D1 and D2 and D1+D2')
-    model_3 = load_multitask_model(weight_path=weight_path_pattern.format(3, 'multi'), device=device)
-    test_multitask(model_3, list_data_files)
-    del model_3
+    print('test model 0: single task, data D1, 2 classes of D1')
+    model_0 = load_single_task_model(weight_path=weight_path_pattern.format(0, 'single'), device=device)
+    test_single_task(model_0, list_data_files)
+    del model_0

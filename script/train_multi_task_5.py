@@ -25,8 +25,8 @@ def load_data(folder: str):
     Returns:
 
     """
-    train_dict_1 = {0: [], 1: []}  # D1+D2
-    train_dict_2 = defaultdict(list)  # D2
+    train_dict_1 = {0: [], 1: []}  # D1, 2 D1 classes
+    train_dict_2 = defaultdict(list)  # D1 fall + D2, 1 D1 fall class + 21 D2 classes
     valid_dict = {0: [], 1: []}
 
     files = glob(f'{folder}/D*/*.npy')
@@ -41,15 +41,17 @@ def load_data(folder: str):
         # if this is D2 dataset, add to
         if file.split(os.sep)[-2] == 'D2':
             d2_class = re.search(r'_task([0-9][0-9]).npy$', file).group(1)
-            train_dict_2[d2_class].append(arr)
-            train_dict_1[0].append(arr)
+            train_dict_2[f'D2_{d2_class}'].append(arr)
         # get fall data
         elif file.endswith('_fall.npy'):
             train_dict_1[1].append(arr[train_idx])
+            train_dict_2['D1_1'].append(arr[train_idx])
+
             valid_dict[1].append(arr[valid_idx])
         # get all non-fall data
         else:
             train_dict_1[0].append(arr[train_idx])
+
             valid_dict[0].append(arr[valid_idx])
 
     train_dict_1 = {key: np.concatenate(value) for key, value in train_dict_1.items()}
