@@ -10,7 +10,7 @@ from da_multitask.data_generator.classification_data_gen import BasicArrayDatase
 from da_multitask.flow.train_flow import TrainFlow
 from da_multitask.flow.torch_callbacks import ModelCheckpoint, EarlyStop
 from da_multitask.networks.complete_model import CompleteModel
-from da_multitask.networks.backbone import TCN
+from da_multitask.networks.backbone_tcn import TCN
 from da_multitask.networks.classifier import FCClassifier
 
 

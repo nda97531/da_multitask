@@ -1,11 +1,14 @@
+from typing import Union
 import torch.nn as nn
 
 
 class Conv1dBlock(nn.Module):
 
-    def __init__(self, in_filters, out_filters, kernel_size, stride=1, padding=0, dilation=1,
-                 drop_rate=0., use_spatial_dropout=False,
-                 activation=nn.ReLU(), use_batchnorm=True):
+    def __init__(self, input_len: Union[int, None], in_filters: int, out_filters: int,
+                 kernel_size: int, stride: int = 1,
+                 padding: Union[int, list, tuple] = 0, dilation: int = 1,
+                 drop_rate: float = 0., use_spatial_dropout: bool = False,
+                 activation=nn.ReLU(), norm_layer: Union[str, None] = 'batch'):
         super().__init__()
         """
         Conv with padding, activation, batch norm
@@ -13,8 +16,8 @@ class Conv1dBlock(nn.Module):
         conv = []
 
         if type(padding) is int:
-            conv += [nn.Conv1d(in_channels=in_filters, out_channels=out_filters, kernel_size=kernel_size,
-                               stride=stride, padding=padding, dilation=dilation), ]
+            conv.append(nn.Conv1d(in_channels=in_filters, out_channels=out_filters, kernel_size=kernel_size,
+                                  stride=stride, padding=padding, dilation=dilation))
 
         elif (type(padding) is tuple) or (type(padding) is list):
             conv += [nn.ConstantPad1d(padding=padding, value=0.),
@@ -23,11 +26,15 @@ class Conv1dBlock(nn.Module):
         else:
             raise ValueError('padding must be integer or list/tuple!')
 
-        if use_batchnorm:
-            conv += [activation,
-                     nn.BatchNorm1d(out_filters)]
-        else:
-            conv.append(activation)
+        conv.append(activation)
+
+        if norm_layer == 'batch':
+            conv.append(nn.BatchNorm1d(out_filters))
+        elif norm_layer == 'layer':
+            assert input_len > 0
+            conv.append(nn.LayerNorm([out_filters, input_len]))
+        elif norm_layer:
+            raise ValueError(f'invalid norm_layer: {norm_layer}')
 
         if use_spatial_dropout:
             conv.append(nn.Dropout1d(drop_rate))

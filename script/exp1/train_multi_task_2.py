@@ -12,7 +12,7 @@ from da_multitask.data_generator.classification_data_gen import BasicArrayDatase
 from da_multitask.flow.train_flow import TrainFlow
 from da_multitask.flow.torch_callbacks import ModelCheckpoint, EarlyStop
 from da_multitask.networks.complete_model import CompleteModel
-from da_multitask.networks.backbone import TCN
+from da_multitask.networks.backbone_tcn import TCN
 from da_multitask.networks.classifier import MultiFCClassifiers
 
 
@@ -25,8 +25,8 @@ def load_data(folder: str):
     Returns:
 
     """
-    train_dict_1 = {0: [], 1: []}  # D1+D2
-    train_dict_2 = defaultdict(list)  # D2
+    train_dict_1 = {0: [], 1: []}
+    train_dict_2 = defaultdict(list)
     valid_dict = {0: [], 1: []}
 
     files = glob(f'{folder}/D*/*.npy')
@@ -42,7 +42,6 @@ def load_data(folder: str):
         if file.split(os.sep)[-2] == 'D2':
             d2_class = re.search(r'_task([0-9][0-9]).npy$', file).group(1)
             train_dict_2[d2_class].append(arr)
-            train_dict_1[0].append(arr)
         # get fall data
         elif file.endswith('_fall.npy'):
             train_dict_1[1].append(arr[train_idx])

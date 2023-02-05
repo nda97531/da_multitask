@@ -7,7 +7,7 @@ from sklearn.metrics import classification_report
 from tqdm import tqdm
 
 from utils.sliding_window import sliding_window
-from da_multitask.networks.backbone import TCN
+from da_multitask.networks.backbone_tcn import TCN
 from da_multitask.networks.classifier import MultiFCClassifiers, FCClassifier
 from da_multitask.networks.complete_model import CompleteModel
 
@@ -23,6 +23,7 @@ def load_single_task_model(weight_path: str, device: str = 'cpu') -> nn.Module:
     """
     # create model
     backbone = TCN(
+        input_shape=(400, 3),
         how_flatten='spatial attention gap',
         n_tcn_channels=(64,) * 5 + (128,) * 2,
         tcn_drop_rate=0.5,
@@ -44,6 +45,7 @@ def load_multitask_model(weight_path: str, n_classes: list, device: str = 'cpu')
     """
 
     Args:
+        n_classes:
         weight_path:
         device:
 
@@ -52,6 +54,7 @@ def load_multitask_model(weight_path: str, n_classes: list, device: str = 'cpu')
     """
     # create model
     backbone = TCN(
+        input_shape=(400, 3),
         how_flatten='spatial attention gap',
         n_tcn_channels=(64,) * 5 + (128,) * 2,
         tcn_drop_rate=0.5,
@@ -123,7 +126,7 @@ def test_multitask(model: nn.Module, list_data_files: list, device: str = 'cpu')
             # only use the first task (index 0)
             pred = model(
                 data,
-                classifier_kwargs={'mask': tr.zeros(len(data), dtype=int)}
+                classifier_kwargs={'mask': tr.zeros(len(data), dtype=tr.int)}
             )[0]
             # predict fall (positive-1) if there's any positive window
             pred = pred.argmax(1).any().item()
@@ -139,7 +142,7 @@ if __name__ == '__main__':
 
     list_data_files = glob('/home/ducanh/projects/datasets/SFU/parquet/sub*/*/*.parquet')
     # weight_path_pattern = 'draft/exp_{}/{}_task_last_epoch.pth'
-    weight_path_pattern = 'draft/exp_{}/{}_task.pth'
+    weight_path_pattern = 'draft/exp1/exp_{}/{}_task.pth'
 
     print('test model 6: multitask, data D1 (2 classes of D1) and D1fall+D2 (2 classes of D1)')
     model_6 = load_multitask_model(weight_path=weight_path_pattern.format(6, 'multi'),
