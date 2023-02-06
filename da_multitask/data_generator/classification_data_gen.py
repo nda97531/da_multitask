@@ -2,9 +2,11 @@ import numpy as np
 import torch as tr
 from torch.utils.data import Dataset
 
+from da_multitask.data_generator.augment import Augmenter
+
 
 class BasicArrayDataset(Dataset):
-    def __init__(self, label_data_dict: dict):
+    def __init__(self, label_data_dict: dict, augmenter: Augmenter = None):
         """
 
         Args:
@@ -14,6 +16,7 @@ class BasicArrayDataset(Dataset):
         for k, v in label_data_dict.items():
             print(k, ':', len(v))
 
+        self.augmenter = augmenter
         self.num_classes = len(label_data_dict)
         self.data = []
         self.label = []
@@ -24,11 +27,13 @@ class BasicArrayDataset(Dataset):
         self.data = np.concatenate(self.data)
         self.label = np.concatenate(self.label)
 
-        self.data = tr.from_numpy(self.data).float()
-        self.label = tr.from_numpy(self.label).long()
+        self.data = self.data.astype(np.float32)
+        self.label = self.label.astype(np.int64)
 
     def __getitem__(self, index):
         data = self.data[index]
+        if self.augmenter is not None:
+            data = self.augmenter.apply(data)
         label = self.label[index]
         return data, label
 
@@ -37,16 +42,18 @@ class BasicArrayDataset(Dataset):
 
 
 class ResampleArrayDataset(Dataset):
-    def __init__(self, label_data_dict: dict, shuffle: bool = True):
+    def __init__(self, label_data_dict: dict, shuffle: bool = True, augmenter: Augmenter = None):
         """
 
         Args:
             label_data_dict: key: label (int), value: data [n, ..., channel]
             shuffle: shuffle data after each epoch
+            augmenter:
 
         """
         self.num_classes = len(label_data_dict)
         self.shuffle = shuffle
+        self.augmenter = augmenter
         # key: label (int); value: data [n, ..., channel]
         self.label_data_dict = label_data_dict
         # key: label; value: index of the last called instance
@@ -55,7 +62,7 @@ class ResampleArrayDataset(Dataset):
         print('Label distribution:')
         for cls, arr in self.label_data_dict.items():
             print(cls, ':', len(arr))
-            self.label_data_dict[cls] = tr.from_numpy(arr).float()
+            self.label_data_dict[cls] = arr.astype(np.float32)
             self.label_pick_idx[cls] = 0
 
         # calculate dataset size
@@ -65,6 +72,8 @@ class ResampleArrayDataset(Dataset):
     def __getitem__(self, index):
         label = int(index // self.mean_class_len)
         data = self.label_data_dict[label][self.label_pick_idx[label]]
+        if self.augmenter is not None:
+            data = self.augmenter.apply(data)
 
         # update index
         self.label_pick_idx[label] += 1

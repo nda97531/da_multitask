@@ -69,7 +69,7 @@ class TrainFlow:
         y_true = [list() for _ in dataloaders]
         y_pred = [list() for _ in dataloaders]
         train_loss = 0
-        for batch in tqdm(range(num_iter)):
+        for _ in tqdm(range(num_iter)):
             # load data
             data = [next(dataloader) for dataloader in dataloaders]
             x, y = tuple(zip(*data))

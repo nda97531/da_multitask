@@ -1,6 +1,8 @@
 from typing import Union, List
 import numpy as np
 
+from utils.number_array import gen_random_curves
+
 
 class Augmenter:
     def __init__(self, p: float):
@@ -23,7 +25,7 @@ class Augmenter:
         """
         raise NotImplementedError()
 
-    def apply(self, org_data: np.ndarray) -> np.ndarray:
+    def _copy_data(self, org_data: np.ndarray) -> np.ndarray:
         """
 
         Args:
@@ -32,8 +34,20 @@ class Augmenter:
         Returns:
 
         """
+        return org_data.copy()
+
+    def apply(self, org_data: np.ndarray) -> np.ndarray:
+        """
+
+        Args:
+            org_data: [time step, channel]
+
+        Returns:
+
+        """
         if (self.p >= 1) or (np.random.rand() < self.p):
-            data = self._apply_logic(org_data)
+            data = self._copy_data(org_data)
+            data = self._apply_logic(data)
             return data
 
         return org_data
@@ -43,6 +57,12 @@ class ComposeAugmenters(Augmenter):
     def __init__(self, augmenters: List[Augmenter], p: float = 1):
         super().__init__(p)
         self.augmenters = augmenters
+
+    def _copy_data(self, org_data: np.ndarray) -> np.ndarray:
+        """
+        No copy needed because all elements augmenters do this
+        """
+        return org_data
 
     def _apply_logic(self, org_data: np.ndarray) -> np.ndarray:
         for aug in self.augmenters:
@@ -97,14 +117,13 @@ class Rotate(Augmenter):
         rotate_angles = np.random.uniform(low=self.angle_range[0], high=self.angle_range[1])
 
         # transpose data to shape [*, channel, time step]
-        transpose_order = tuple(range(len(org_data.shape) - 2)) + (-1, -2)
-        data = org_data.copy().transpose(transpose_order)
+        data = org_data.T
 
         # for every 3 channels
         for i in range(0, data.shape[-2], 3):
             data[..., i:i + 3, :] = self.rotate(data[..., i:i + 3, :], *rotate_angles)
         # transpose back to [time step, channel]
-        data = data.transpose(transpose_order)
+        data = data.T
         return data
 
     @staticmethod
@@ -128,37 +147,56 @@ class Rotate(Augmenter):
         cos_z = np.cos(rotate_z)
         sin_z = np.sin(rotate_z)
 
-        # create rotation filters
-        rotate_x = np.array([
-            [1, 0, 0],
-            [0, cos_x, -sin_x],
-            [0, sin_x, cos_x]
-        ])
-        rotate_y = np.array([
-            [cos_y, 0, sin_y],
-            [0, 1, 0],
-            [-sin_y, 0, cos_y]
-        ])
-        rotate_z = np.array([
-            [cos_z, -sin_z, 0],
-            [sin_z, cos_z, 0],
-            [0, 0, 1]
+        rotate_filters = np.array([
+            [cos_y * cos_z, sin_x * sin_y * cos_z - cos_x * sin_z, cos_x * sin_y * cos_z + sin_x * sin_z],
+            [cos_y * sin_z, sin_x * sin_y * sin_z + cos_x * cos_z, cos_x * sin_y * sin_z - sin_x * cos_z],
+            [-sin_y, sin_x * cos_y, cos_x * cos_y]
         ])
 
-        # rotate original data by multiply it with rotation filters
-        rotate_filters = np.matmul(np.matmul(rotate_x, rotate_y), rotate_z)
         data = np.matmul(rotate_filters, data)
         return data
 
 
-if __name__ == '__main__':
-    aug = Rotate(p=1,
-                 angle_x_range=[180, 180],
-                 angle_y_range=[90, 90],
-                 angle_z_range=0)
+class TimeWarp(Augmenter):
+    def __init__(self, p: float, sigma: float = 0.2, knot: int = 4):
+        """
 
-    data = aug.apply(np.ones([2, 10, 6]))
-    print(data[0])
-    print()
-    print(data[1])
-    print(data.shape)
+        Args:
+            p:
+            sigma:
+            knot:
+        """
+        super().__init__(p)
+        self.sigma = sigma
+        self.knot = knot
+
+    def distort_time_steps(self, length: int, num_curves: int):
+        """
+
+        Args:
+            length:
+            num_curves:
+        Returns:
+
+        """
+        tt = gen_random_curves(length, num_curves, self.sigma, self.knot)
+        tt_cum = np.cumsum(tt, axis=0)
+
+        # Make the last value equal length
+        t_scale = (length - 1) / tt_cum[-1]
+
+        tt_cum *= t_scale
+        return tt_cum
+
+    def _copy_data(self, org_data: np.ndarray) -> np.ndarray:
+        # don't need to copy because `_apply_logic` doesn't modify org_data
+        return org_data
+
+    def _apply_logic(self, org_data: np.ndarray) -> np.ndarray:
+        # create new timestamp for all channels
+        tt_new = self.distort_time_steps(org_data.shape[-2], 1).squeeze()
+        x_range = np.arange(org_data.shape[0])
+        data = np.array([
+            np.interp(x_range, tt_new, org_data[:, i]) for i in range(org_data.shape[-1])
+        ]).T
+        return data

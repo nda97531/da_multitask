@@ -1,5 +1,25 @@
 from typing import List
 import numpy as np
+from scipy.interpolate import CubicSpline
+
+
+def gen_random_curves(length: int, num_curves: int, sigma=0.2, knot=4):
+    """
+
+    Args:
+        length:
+        num_curves:
+        sigma:
+        knot:
+
+    Returns:
+        array shape [length, num curves]
+    """
+    xx = np.arange(0, length, (length - 1) / (knot + 1))
+    yy = np.random.normal(loc=1.0, scale=sigma, size=(knot + 2, num_curves))
+    x_range = np.arange(length)
+    curves = np.array([CubicSpline(xx, yy[:, i])(x_range) for i in range(num_curves)]).T
+    return curves
 
 
 def interval_intersection(intervals: List[List[List[int]]]) -> List[List[int]]:

@@ -7,7 +7,7 @@ import polars as pl
 from collections import defaultdict
 from tqdm import tqdm
 
-from da_multitask.constant import G_TO_MS2
+from public_datasets.constant import G_TO_MS2
 from utils.pd_dataframe import interpolate_numeric_df, write_df_file
 from utils.sliding_window import sliding_window
 
