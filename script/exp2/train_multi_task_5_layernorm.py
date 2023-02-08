@@ -8,6 +8,7 @@ from glob import glob
 import numpy as np
 from torch.utils.data import DataLoader
 
+from da_multitask.data_generator.augment import ComposeAugmenters, Rotate, TimeWarp
 from da_multitask.data_generator.classification_data_gen import BasicArrayDataset, ResampleArrayDataset
 from da_multitask.flow.train_flow import TrainFlow
 from da_multitask.flow.torch_callbacks import ModelCheckpoint, EarlyStop
@@ -58,11 +59,7 @@ def load_data(folder: str):
     train_dict_2 = {i: np.concatenate(train_dict_2[key]) for i, key in enumerate(sorted(train_dict_2))}
     valid_dict = {key: np.concatenate(value) for key, value in valid_dict.items()}
 
-    train_set_1 = ResampleArrayDataset(train_dict_1)
-    train_set_2 = ResampleArrayDataset(train_dict_2)
-    valid_set = BasicArrayDataset(valid_dict)
-
-    return [train_set_1, train_set_2], valid_set
+    return [train_dict_1, train_dict_2], valid_dict
 
 
 if __name__ == '__main__':
@@ -74,7 +71,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # create data loaders
-    train_sets, valid_set = load_data('../../npy_data')
+    train_dicts, valid_dict = load_data('../../npy_data')
+
+    augmenter = ComposeAugmenters([
+        Rotate(p=0.5, angle_x_range=180, angle_y_range=180, angle_z_range=180),
+        TimeWarp(p=0.5, sigma=0.25, knot_range=4)
+    ])
+
+    train_sets = [ResampleArrayDataset(train_dict, augmenter=augmenter) for train_dict in train_dicts]
+    valid_set = BasicArrayDataset(valid_dict)
     train_loaders = [DataLoader(train_set, batch_size=8, shuffle=True) for train_set in train_sets]
     valid_loader = DataLoader(valid_set, batch_size=16, shuffle=False)
 

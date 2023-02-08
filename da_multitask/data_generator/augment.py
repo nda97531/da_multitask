@@ -4,6 +4,30 @@ import numpy as np
 from utils.number_array import gen_random_curves
 
 
+def format_range(x: any, start_0: bool) -> np.ndarray:
+    """
+    Turn an arbitrary input into a range. For example:
+        1 to [-1, 1] or [0, 1]
+        None to [0, 0]
+        [-1, 1] will be kept intact
+
+    Args:
+        x: any input
+        start_0: if input x is a scalar and this is True, the starting point of the range will be 0,
+            otherwise it will be -abs(x)
+
+    Returns:
+        a np array of 2 element [range start, range end]
+    """
+    if x is None:
+        x = [0, 0]
+    if isinstance(x, float) or isinstance(x, int):
+        x = abs(x)
+        x = [0 if start_0 else -x, x]
+    assert len(x) == 2, 'x must be a scalar or a list/tuple of 2 numbers'
+    return np.array(x)
+
+
 class Augmenter:
     def __init__(self, p: float):
         """
@@ -65,8 +89,8 @@ class ComposeAugmenters(Augmenter):
         return org_data
 
     def _apply_logic(self, org_data: np.ndarray) -> np.ndarray:
-        for aug in self.augmenters:
-            org_data = aug.apply(org_data)
+        for i in np.random.permutation(range(len(self.augmenters))):
+            org_data = self.augmenters[i].apply(org_data)
         return org_data
 
 
@@ -86,21 +110,10 @@ class Rotate(Augmenter):
         """
         super().__init__(p=p)
 
-        def format_input(x):
-            if x is None:
-                x = [0, 0]
-            if isinstance(x, float) or isinstance(x, int):
-                x = abs(x)
-                x = [-x, x]
-            assert len(x) == 2, 'x must be a scalar or a list/tuple of 2 numbers'
-            # convert angles from angle to radian
-            x = np.array(x) / 180. * np.pi
-            return x
-
         self.angle_range = list(zip(
-            format_input(angle_x_range),
-            format_input(angle_y_range),
-            format_input(angle_z_range)
+            format_range(angle_x_range, start_0=False),
+            format_range(angle_y_range, start_0=False),
+            format_range(angle_z_range, start_0=False)
         ))
 
     def _apply_logic(self, org_data: np.ndarray) -> np.ndarray:
@@ -116,7 +129,7 @@ class Rotate(Augmenter):
 
         rotate_angles = np.random.uniform(low=self.angle_range[0], high=self.angle_range[1])
 
-        # transpose data to shape [*, channel, time step]
+        # transpose data to shape [channel, time step]
         data = org_data.T
 
         # for every 3 channels
@@ -158,17 +171,19 @@ class Rotate(Augmenter):
 
 
 class TimeWarp(Augmenter):
-    def __init__(self, p: float, sigma: float = 0.2, knot: int = 4):
+    def __init__(self, p: float, sigma: float = 0.2, knot_range: Union[int, list] = 4):
         """
 
         Args:
             p:
             sigma:
-            knot:
+            knot_range:
         """
         super().__init__(p)
         self.sigma = sigma
-        self.knot = knot
+        self.knot_range = format_range(knot_range, start_0=True)
+        # add one here because upper bound is exclusive when randomising
+        self.knot_range[1] += 1
 
     def distort_time_steps(self, length: int, num_curves: int):
         """
@@ -179,7 +194,8 @@ class TimeWarp(Augmenter):
         Returns:
 
         """
-        tt = gen_random_curves(length, num_curves, self.sigma, self.knot)
+        knot = np.random.randint(self.knot_range[0], self.knot_range[1])
+        tt = gen_random_curves(length, num_curves, self.sigma, knot)
         tt_cum = np.cumsum(tt, axis=0)
 
         # Make the last value equal length

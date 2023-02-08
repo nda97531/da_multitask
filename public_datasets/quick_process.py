@@ -15,11 +15,12 @@ from utils.sliding_window import sliding_window
 class QuickProcess:
     def __init__(self, name: str, destination_folder: str, signal_freq: float = 50., window_size_sec: float = 4):
         """
+        This class transforms public datasets into the same format for ease of use.
 
         Args:
-            name:
-            destination_folder:
-            signal_freq:
+            name: name of the dataset
+            destination_folder: folder to save output
+            signal_freq: (Hz) resample signal to this frequency by linear interpolation
             window_size_sec: window size in second
         """
         self.name = name
@@ -31,12 +32,14 @@ class QuickProcess:
 
     def _resample(self, df: pd.DataFrame, timestamp_col: str) -> pd.DataFrame:
         """
+        Resample a dataframe
 
         Args:
-            df:
+            df: dataframe
+            timestamp_col: name of the timestamp column
 
         Returns:
-
+            resampled dataframe
         """
         start_ts = df.at[0, timestamp_col]
         end_ts = df.at[len(df) - 1, timestamp_col]
@@ -51,6 +54,9 @@ class QuickProcess:
         return df
 
     def run(self):
+        """
+        Main processing method
+        """
         raise NotImplementedError()
 
 

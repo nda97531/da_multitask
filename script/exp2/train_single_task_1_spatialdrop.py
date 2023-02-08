@@ -71,9 +71,9 @@ if __name__ == '__main__':
         how_flatten='spatial attention gap',
         n_tcn_channels=(64,) * 5 + (128,) * 2,
         tcn_drop_rate=0.5,
-        use_spatial_dropout=False,
-        conv_norm='layer',
-        attention_conv_norm='layer'
+        use_spatial_dropout=True,
+        conv_norm='batch',
+        attention_conv_norm='batch'
     )
     classifier = FCClassifier(
         n_features=128,
@@ -84,10 +84,11 @@ if __name__ == '__main__':
     # create data loaders
     train_dict, valid_dict = load_data('../../npy_data')
 
-    augmenter = ComposeAugmenters([
-        Rotate(p=0.5, angle_x_range=180, angle_y_range=180, angle_z_range=180),
-        TimeWarp(p=0.5, sigma=0.25, knot_range=4)
-    ])
+    augmenter = ComposeAugmenters(
+        p=1,
+        augmenters=[Rotate(p=0.5, angle_x_range=180, angle_y_range=180, angle_z_range=180),
+                    TimeWarp(p=0.5, sigma=0.25, knot_range=4)]
+    )
 
     train_set = ResampleArrayDataset(train_dict, augmenter=augmenter)
     valid_set = BasicArrayDataset(valid_dict)

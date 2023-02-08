@@ -45,7 +45,8 @@ def load_single_task_model(weight_path: str, device: str = 'cpu',
 
 
 def load_multitask_model(weight_path: str, n_classes: list, device: str = 'cpu',
-                         conv_norm='batch', attention_conv_norm='batch') -> nn.Module:
+                         conv_norm='batch', attention_conv_norm='batch',
+                         n_tcn_channels=(64,) * 5 + (128,) * 2) -> nn.Module:
     """
 
     Args:
@@ -60,14 +61,14 @@ def load_multitask_model(weight_path: str, n_classes: list, device: str = 'cpu',
     backbone = TCN(
         input_shape=(200, 3),
         how_flatten='spatial attention gap',
-        n_tcn_channels=(64,) * 5 + (128,) * 2,
+        n_tcn_channels=n_tcn_channels,
         tcn_drop_rate=0.5,
         use_spatial_dropout=False,
         conv_norm=conv_norm,
         attention_conv_norm=attention_conv_norm
     )
     classifier = MultiFCClassifiers(
-        n_features=128,
+        n_features=n_tcn_channels[-1],
         n_classes=n_classes
     )
     model = CompleteModel(backbone=backbone, classifier=classifier).to(device)
@@ -145,48 +146,67 @@ def test_multitask(model: nn.Module, list_data_files: list, device: str = 'cpu')
 
 if __name__ == '__main__':
     print('compare norm layers, dropout layers')
-    device = 'cuda:0'
+    device = 'cuda:1'
 
     list_data_files = glob('/home/ducanh/projects/datasets/SFU/parquet/sub*/*/*.parquet')
-    # weight_path_pattern = 'draft/exp2/run_{}/{}_task_last_epoch.pth'
-    weight_path_pattern = 'draft/exp2/run_{}/{}_task.pth'
+    # weight_path_pattern = 'draft/exp3/run_{}/{}_task_last_epoch.pth'
+    weight_path_pattern = 'draft/exp3/run_{}/{}_task.pth'
 
-    print('test run 5: multitask, data D1 (2 classes of D1) and D1fall+D2 (22 classes of D1+D2), '
-          'batch norm, spatial drop out')
+    print('test run 7: multitask, data D1 (2 classes of D1) and D1fall+D2 (22 classes of D1+D2), '
+          'sgd with momentum')
+    model_7 = load_multitask_model(weight_path=weight_path_pattern.format(8, 'multi'),
+                                   n_classes=[2, 22], device=device,
+                                   conv_norm='batch', attention_conv_norm='batch',
+                                   n_tcn_channels=(64,) * 7)
+    test_multitask(model_7, list_data_files)
+    del model_7
+
+    print('test run 6: multitask, data D1 (2 classes of D1) and D1fall+D2 (22 classes of D1+D2), '
+          'adam and spatial dropout')
+    model_6 = load_multitask_model(weight_path=weight_path_pattern.format(6, 'multi'),
+                                   n_classes=[2, 22], device=device,
+                                   conv_norm='batch', attention_conv_norm='batch')
+    test_multitask(model_6, list_data_files)
+    del model_6
+
+    print('test run 5: multitask, data D1 (2 classes of D1) and D1fall+D2 (22 classes of D1+D2), rmsprop 1e-3')
     model_5 = load_multitask_model(weight_path=weight_path_pattern.format(5, 'multi'),
                                    n_classes=[2, 22], device=device,
                                    conv_norm='batch', attention_conv_norm='batch')
     test_multitask(model_5, list_data_files)
     del model_5
 
-    print('test run 4: single task, data D1+D2, 2 classes of D1, batch norm, spatial drop out')
-    model_4 = load_single_task_model(weight_path=weight_path_pattern.format(4, 'single'), device=device,
-                                     conv_norm='batch', attention_conv_norm='batch')
-    test_single_task(model_4, list_data_files)
+    print('test run 4: multitask, data D1 (2 classes of D1) and D1fall+D2 (22 classes of D1+D2), adam 1e-4')
+    model_4 = load_multitask_model(weight_path=weight_path_pattern.format(4, 'multi'),
+                                   n_classes=[2, 22], device=device,
+                                   conv_norm='batch', attention_conv_norm='batch')
+    test_multitask(model_4, list_data_files)
     del model_4
 
-    print('test run 3: multitask, data D1 (2 classes of D1) and D1fall+D2 (22 classes of D1+D2), batch norm')
+    print('test run 3: multitask, data D1 (2 classes of D1) and D1fall+D2 (22 classes of D1+D2), adam 1e-3')
     model_3 = load_multitask_model(weight_path=weight_path_pattern.format(3, 'multi'),
                                    n_classes=[2, 22], device=device,
                                    conv_norm='batch', attention_conv_norm='batch')
     test_multitask(model_3, list_data_files)
     del model_3
 
-    print('test run 2: single task, data D1+D2, 2 classes of D1, batch norm')
-    model_2 = load_single_task_model(weight_path=weight_path_pattern.format(2, 'single'), device=device,
-                                     conv_norm='batch', attention_conv_norm='batch')
-    test_single_task(model_2, list_data_files)
+    print('test run 2: multitask, data D1 (2 classes of D1) and D1fall+D2 (22 classes of D1+D2), rotate + time warp')
+    model_2 = load_multitask_model(weight_path=weight_path_pattern.format(2, 'multi'),
+                                   n_classes=[2, 22], device=device,
+                                   conv_norm='batch', attention_conv_norm='batch')
+    test_multitask(model_2, list_data_files)
     del model_2
 
-    print('test run 1: multitask, data D1 (2 classes of D1) and D1fall+D2 (22 classes of D1+D2), layer norm')
+    print('test run 1: multitask, data D1 (2 classes of D1) and D1fall+D2 (22 classes of D1+D2), time warp')
     model_1 = load_multitask_model(weight_path=weight_path_pattern.format(1, 'multi'),
                                    n_classes=[2, 22], device=device,
-                                   conv_norm='layer', attention_conv_norm='layer')
+                                   conv_norm='batch', attention_conv_norm='batch')
     test_multitask(model_1, list_data_files)
     del model_1
 
-    print('test run 0: single task, data D1+D2, 2 classes of D1, layer norm')
-    model_0 = load_single_task_model(weight_path=weight_path_pattern.format(0, 'single'), device=device,
-                                     conv_norm='layer', attention_conv_norm='layer')
-    test_single_task(model_0, list_data_files)
+    print('test run 0: multitask, data D1 (2 classes of D1) and D1fall+D2 (22 classes of D1+D2), rotate')
+    model_0 = load_multitask_model(weight_path=weight_path_pattern.format(0, 'multi'),
+                                   n_classes=[2, 22], device=device,
+                                   conv_norm='batch', attention_conv_norm='batch')
+    test_multitask(model_0, list_data_files)
     del model_0

@@ -138,6 +138,7 @@ def test_multitask(model: nn.Module, list_data_files: list, device: str = 'cpu')
 
 
 if __name__ == '__main__':
+    print('compare task combinations')
     device = 'cuda:0'
 
     list_data_files = glob('/home/ducanh/projects/datasets/SFU/parquet/sub*/*/*.parquet')
