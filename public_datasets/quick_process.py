@@ -456,6 +456,7 @@ class MobiActV2(QuickProcess):
         if is_fall_label.any():
             # padding if not enough rows
             if len(arr) <= self.window_size_row:
+                arr = arr[:, :-1].astype(float)
                 window = np.pad(arr, [[self.window_size_row - len(arr), 0], [0, 0]])
                 return {'fall': np.expand_dims(window, axis=0)}
 
@@ -475,6 +476,7 @@ class MobiActV2(QuickProcess):
                 )
                 sequence_fall_windows.append(fall_windows)
             sequence_fall_windows = np.concatenate(sequence_fall_windows)
+            sequence_fall_windows = sequence_fall_windows[:, :, :-1].astype(float)
             return {'fall': sequence_fall_windows}
 
         # if this is a non-fall sequence
