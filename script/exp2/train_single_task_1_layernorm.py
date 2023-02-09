@@ -85,7 +85,7 @@ if __name__ == '__main__':
     train_dict, valid_dict = load_data('../../npy_data')
 
     augmenter = ComposeAugmenters([
-        Rotate(p=0.5, angle_x_range=180, angle_y_range=180, angle_z_range=180),
+        Rotate(p=0.5, angle_range=180, angle_y_range=180, angle_z_range=180),
         TimeWarp(p=0.5, sigma=0.25, knot_range=4)
     ])
 

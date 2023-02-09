@@ -1,6 +1,6 @@
 from typing import Union, List
 import numpy as np
-
+from transforms3d.axangles import axangle2mat
 from utils.number_array import gen_random_curves
 
 
@@ -95,26 +95,19 @@ class ComposeAugmenters(Augmenter):
 
 
 class Rotate(Augmenter):
-    def __init__(self, p: float,
-                 angle_x_range: Union[list, tuple, float] = None,
-                 angle_y_range: Union[list, tuple, float] = None,
-                 angle_z_range: Union[list, tuple, float] = None) -> None:
+    def __init__(self, p: float, angle_range: Union[list, tuple, float] = None) -> None:
         """
+        Rotate tri-axial data in a random axis.
 
         Args:
-            p:
-            angle_x_range: if this is a list, randomly pick an angle in this range;
+            p: probability to apply this augmenter each time it is called
+            angle_range: the angle is randomised within this range;
+                if this is a list, randomly pick an angle in this range;
                 if it's a float, the range is [-float, float]
-            angle_y_range: same as `angle_x_range`
-            angle_z_range: same as `angle_x_range`
         """
         super().__init__(p=p)
 
-        self.angle_range = list(zip(
-            format_range(angle_x_range, start_0=False),
-            format_range(angle_y_range, start_0=False),
-            format_range(angle_z_range, start_0=False)
-        ))
+        self.angle_range = format_range(angle_range, start_0=False)
 
     def _apply_logic(self, org_data: np.ndarray) -> np.ndarray:
         """
@@ -127,46 +120,35 @@ class Rotate(Augmenter):
         assert (len(org_data.shape) >= 2) and (org_data.shape[-1] % 3 == 0), \
             "expected data shape: [*, any length, channel%3==0]"
 
-        rotate_angles = np.random.uniform(low=self.angle_range[0], high=self.angle_range[1])
+        angle = np.random.uniform(low=self.angle_range[0], high=self.angle_range[1])
+        direction_vector = np.random.uniform(-1, 1, size=3)
 
         # transpose data to shape [channel, time step]
         data = org_data.T
 
         # for every 3 channels
         for i in range(0, data.shape[-2], 3):
-            data[..., i:i + 3, :] = self.rotate(data[..., i:i + 3, :], *rotate_angles)
+            data[i:i + 3, :] = self.rotate(data[i:i + 3, :], angle, direction_vector)
+
         # transpose back to [time step, channel]
         data = data.T
         return data
 
     @staticmethod
-    def rotate(data, rotate_x, rotate_y, rotate_z):
+    def rotate(data, angle: float, axis: np.ndarray):
         """
-        Rotate an array
+        Rotate data array
 
         Args:
-            data: shape (*, 3, time step)
-            rotate_x: angle in RADIAN
-            rotate_y: angle in RADIAN
-            rotate_z: angle in RADIAN
+            data: data array, shape [3, n]
+            angle: a random angle in radian
+            axis: a 3-d vector, the axis to rotate around
 
         Returns:
-            array shape (*, 3, time step)
+            rotated data of the same format as the input
         """
-        cos_x = np.cos(rotate_x)
-        sin_x = np.sin(rotate_x)
-        cos_y = np.cos(rotate_y)
-        sin_y = np.sin(rotate_y)
-        cos_z = np.cos(rotate_z)
-        sin_z = np.sin(rotate_z)
-
-        rotate_filters = np.array([
-            [cos_y * cos_z, sin_x * sin_y * cos_z - cos_x * sin_z, cos_x * sin_y * cos_z + sin_x * sin_z],
-            [cos_y * sin_z, sin_x * sin_y * sin_z + cos_x * cos_z, cos_x * sin_y * sin_z - sin_x * cos_z],
-            [-sin_y, sin_x * cos_y, cos_x * cos_y]
-        ])
-
-        data = np.matmul(rotate_filters, data)
+        rot_mat = axangle2mat(axis, angle)
+        data = np.matmul(rot_mat, data)
         return data
 
 

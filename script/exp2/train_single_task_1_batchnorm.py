@@ -86,7 +86,7 @@ if __name__ == '__main__':
 
     augmenter = ComposeAugmenters(
         p=1,
-        augmenters=[Rotate(p=0.5, angle_x_range=180, angle_y_range=180, angle_z_range=180),
+        augmenters=[Rotate(p=0.5, angle_range=180, angle_y_range=180, angle_z_range=180),
                     TimeWarp(p=0.5, sigma=0.25, knot_range=4)]
     )
 
