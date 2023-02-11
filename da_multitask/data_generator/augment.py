@@ -101,13 +101,13 @@ class Rotate(Augmenter):
 
         Args:
             p: probability to apply this augmenter each time it is called
-            angle_range: the angle is randomised within this range;
+            angle_range: (degree) the angle is randomised within this range;
                 if this is a list, randomly pick an angle in this range;
                 if it's a float, the range is [-float, float]
         """
         super().__init__(p=p)
 
-        self.angle_range = format_range(angle_range, start_0=False)
+        self.angle_range = format_range(angle_range, start_0=False) / 180 * np.pi
 
     def _apply_logic(self, org_data: np.ndarray) -> np.ndarray:
         """
@@ -185,10 +185,6 @@ class TimeWarp(Augmenter):
 
         tt_cum *= t_scale
         return tt_cum
-
-    def _copy_data(self, org_data: np.ndarray) -> np.ndarray:
-        # don't need to copy because `_apply_logic` doesn't modify org_data
-        return org_data
 
     def _apply_logic(self, org_data: np.ndarray) -> np.ndarray:
         # create new timestamp for all channels

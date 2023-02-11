@@ -4,15 +4,28 @@ import torch.nn as nn
 
 class Conv1dBlock(nn.Module):
 
-    def __init__(self, input_len: Union[int, None], in_filters: int, out_filters: int,
+    def __init__(self, in_filters: int, out_filters: int,
                  kernel_size: int, stride: int = 1,
                  padding: Union[int, list, tuple] = 0, dilation: int = 1,
                  drop_rate: float = 0., use_spatial_dropout: bool = False,
-                 activation=nn.ReLU(), norm_layer: Union[str, None] = 'batch'):
-        super().__init__()
+                 activation=nn.ReLU(), norm_layer: Union[str, None] = 'batch', input_len: Union[int, None] = None):
         """
         Conv with padding, activation, batch norm
+
+        Args:
+            input_len: length of the input window, this is only necessary if `norm_layer` is 'layer'
+            in_filters:
+            out_filters:
+            kernel_size:
+            stride:
+            padding:
+            dilation:
+            drop_rate:
+            use_spatial_dropout:
+            activation:
+            norm_layer:
         """
+        super().__init__()
         conv = []
 
         if type(padding) is int:

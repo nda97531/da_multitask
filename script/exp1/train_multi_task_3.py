@@ -110,7 +110,7 @@ if __name__ == '__main__':
 
     train_log, valid_log = flow.run(
         train_loader=train_loaders,
-        valid_loader=[valid_loader, None],  # only valid the first task
+        valid_loader=[valid_loader, None],  # only validate the first task
         num_epochs=num_epochs
     )
 

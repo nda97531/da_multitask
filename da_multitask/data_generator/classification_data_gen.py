@@ -27,7 +27,6 @@ class BasicArrayDataset(Dataset):
         self.data = np.concatenate(self.data)
         self.label = np.concatenate(self.label)
 
-        self.data.flags.writeable = False
         self.label = self.label.astype(np.int64)
 
     def __getitem__(self, index):
@@ -62,7 +61,6 @@ class ResampleArrayDataset(Dataset):
         print('Label distribution:')
         for cls, arr in self.label_data_dict.items():
             print(cls, ':', len(arr))
-            self.label_data_dict[cls].flags.writeable = False
             self.label_pick_idx[cls] = 0
 
         # calculate dataset size

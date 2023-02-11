@@ -32,7 +32,7 @@ class TrainFlow:
         y_true = []
         y_pred = []
 
-        pbar = tqdm(total=len(dataloader))
+        pbar = tqdm(total=len(dataloader), ncols=0)
         for batch, (x, y) in enumerate(dataloader):
             x = x.float().to(self.device)
             y = y.to(self.device)
@@ -69,7 +69,7 @@ class TrainFlow:
         y_true = [list() for _ in dataloaders]
         y_pred = [list() for _ in dataloaders]
         train_loss = 0
-        for _ in tqdm(range(num_iter)):
+        for _ in tqdm(range(num_iter), ncols=0):
             # load data
             data = [next(dataloader) for dataloader in dataloaders]
             x, y = tuple(zip(*data))
