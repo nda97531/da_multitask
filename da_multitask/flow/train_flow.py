@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from typing import List, Union, Tuple
 import torch as tr
+import torch.nn.functional as F
 from tqdm import tqdm
 from sklearn.metrics import f1_score
 from torch.utils.data import DataLoader
@@ -10,20 +11,59 @@ from da_multitask.flow.torch_callbacks import TorchCallback, CallbackAction
 
 
 class TrainFlow:
-    def __init__(self, model: tr.nn.Module, loss_fn: tr.nn.Module,
-                 optimizer: tr.optim.Optimizer, device: str, callbacks: List[TorchCallback] = None):
+    def __init__(self, model: tr.nn.Module,
+                 optimizer: tr.optim.Optimizer,
+                 device: str,
+                 loss_fn: tr.nn.Module = 'classification_auto',
+                 callbacks: List[TorchCallback] = None):
         self.model = model.to(device)
-        self.loss_fn = loss_fn
         self.optimizer = optimizer
         self.device = device
+        self.loss_fn = self.auto_classification_loss if loss_fn == 'classification_auto' else loss_fn
 
         self.train_log = []
         self.valid_log = []
 
         self.callbacks = callbacks
 
+    @staticmethod
+    def auto_classification_loss(inp: tr.Tensor, target: tr.Tensor):
+
+        if len(inp.shape) > 1:
+            # if multi-class classification
+            if inp.shape[1] > 1:
+                loss = F.cross_entropy(inp, target)
+                return loss
+            else:
+                inp = inp.squeeze(1)
+
+        # if binary classification
+        loss = F.binary_cross_entropy_with_logits(inp, target.float())
+        return loss
+
     def cal_metric(self, y_true, y_pred):
+        """
+        Calculate F1 score
+
+        Args:
+            y_true: 1d array/tensor shape [num samples]
+            y_pred: 2d array/tensor shape [num samples, num class], if num class==1, treat this as a 
+                probability array for binary classification; if 1d array, treat as categorical
+
+        Returns:
+            float: f1 score
+        """
+        if len(y_pred.shape) > 1:
+            # if multi-class classification
+            if y_pred.shape[1] > 1:
+                return f1_score(y_true, y_pred.argmax(1), average='macro')
+
+            # if binary classification
+            else:
+                y_pred = (tr.sigmoid(y_pred.squeeze(1)) >= 0.5).long()
+        
         return f1_score(y_true, y_pred, average='macro')
+
 
     def train_loop(self, dataloader: DataLoader):
         self.model = self.model.train()
@@ -55,7 +95,7 @@ class TrainFlow:
 
         # record epoch log
         train_loss /= len(dataloader)
-        metric = self.cal_metric(tr.concatenate(y_true), tr.concatenate(y_pred).argmax(1))
+        metric = self.cal_metric(tr.concatenate(y_true), tr.concatenate(y_pred))
         self.train_log.append({'loss': train_loss, 'metric': metric})
         print(f'Train: {self.train_log[-1]}')
 
@@ -107,7 +147,7 @@ class TrainFlow:
         # record epoch log
         train_loss /= num_iter
         y_true = [tr.concatenate(cls) for cls in y_true]
-        y_pred = [tr.concatenate(cls).argmax(1) for cls in y_pred]
+        y_pred = [tr.concatenate(cls) for cls in y_pred]
         metrics = [self.cal_metric(y_true[i], y_pred[i]) for i in range(len(y_true))]
         self.train_log.append({'loss': train_loss} | {f'metric_task_{i}': metrics[i] for i in range(len(metrics))})
         print(f'Train: {self.train_log[-1]}')
@@ -131,7 +171,7 @@ class TrainFlow:
 
         valid_loss /= num_batches
         y_true = tr.concatenate(y_true).to('cpu')
-        y_pred = tr.concatenate(y_pred).argmax(1).to('cpu')
+        y_pred = tr.concatenate(y_pred).to('cpu')
         metric = self.cal_metric(y_true, y_pred)
 
         # record epoch log
@@ -177,7 +217,7 @@ class TrainFlow:
             # calculate log for one task
             task_loss /= num_batches
             y_true = tr.concatenate(y_true).to('cpu')
-            y_pred = tr.concatenate(y_pred).argmax(1).to('cpu')
+            y_pred = tr.concatenate(y_pred).to('cpu')
             metric = self.cal_metric(y_true, y_pred)
 
             # record log for all tasks
