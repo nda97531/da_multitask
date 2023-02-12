@@ -26,7 +26,7 @@ def load_data(folder: str):
 
     """
     train_dict_1 = {0: [], 1: []}  # D1, 2 D1 classes
-    train_dict_2 = defaultdict(list)  # D1+D2, 2 D1 classes + all classes of D2
+    train_dict_2 = {0: [], 1: []}  # D1+D2, 2 D1 classes
     valid_dict = {0: [], 1: []}
 
     # GET D2
@@ -34,8 +34,7 @@ def load_data(folder: str):
     print(f'{len(files)} files found for D2')
     for file in files:
         arr = np.load(file)[:, :, 1:]
-        d2_class = file.split('/')[-2]
-        train_dict_2[f'D2_{d2_class}'].append(arr)
+        train_dict_2[0].append(arr)
 
     # GET D1, both train and valid
     files = sorted(glob(f'{folder}/D1/*/*.npy'))
@@ -62,8 +61,8 @@ def load_data(folder: str):
     # append D1train into train_dict(s)
     train_dict_1[0].append(d1_windows_train[d1_labels_train == 0])
     train_dict_1[1].append(d1_windows_train[d1_labels_train == 1])
-    train_dict_2['nonfall'].append(d1_windows_train[d1_labels_train == 0])
-    train_dict_2['fall'].append(d1_windows_train[d1_labels_train == 1])
+    train_dict_2[0].append(d1_windows_train[d1_labels_train == 0])
+    train_dict_2[1].append(d1_windows_train[d1_labels_train == 1])
 
     # append D1valid into valid dict
     valid_dict[0].append(d1_windows_valid[d1_labels_valid == 0])
@@ -71,7 +70,7 @@ def load_data(folder: str):
 
     # return result
     train_dict_1 = {key: np.concatenate(value) for key, value in train_dict_1.items()}
-    train_dict_2 = {i: np.concatenate(val) for i, val in enumerate(train_dict_2.values())}
+    train_dict_2 = {key: np.concatenate(value) for key, value in train_dict_1.items()}
     valid_dict = {key: np.concatenate(value) for key, value in valid_dict.items()}
     return [train_dict_1, train_dict_2], valid_dict
 
@@ -81,7 +80,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', '-d', type=str, required=True)
-    parser.add_argument('--name', '-n', default='g3.6',
+    parser.add_argument('--name', '-n', default='g3.5',
                         help='name of the experiment to create a folder to save weights')
     parser.add_argument('--data-folder', '-data', default='/home/ducanh/projects/npy_data_seq/',
                         help='path to data folder')

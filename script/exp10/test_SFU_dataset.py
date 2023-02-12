@@ -150,14 +150,14 @@ if __name__ == '__main__':
 
     list_data_files = glob('/home/ducanh/projects/datasets/SFU/parquet/sub*/*/*.parquet')
     # weight_path_pattern = 'draft/{exp_id}/run_{run_id}/{task}_task_last_epoch.pth'
-    weight_path_pattern = 'draft/{exp_id}/run_{run_id}/{task}_task.pth'
+    weight_path_pattern = 'draft/result_exp10/{exp_id}/run_{run_id}/{task}_task.pth'
 
     # key: exp id; value: a dict of {precision, recall, f1score}
     all_results = {}
 
     # region: test single task
     exps = [
-        # 'g1.1',
+        'g1.1',
         'g1.2'
     ]
     for exp_id in exps:
@@ -183,13 +183,14 @@ if __name__ == '__main__':
     
     # region: test multi task
     num_classes = {
-        # 'g2.1': [2, 21],
-        # 'g2.2': [2, 11],
-        # 'g2.3': [2, 21, 11],
-        # 'g3.1': [2, 21],
-        # 'g3.2': [2, 23],
-        'g3.3': [1, 22],
-        # 'g3.4': [2, 2]
+        'g2.1': [1, 21],
+        'g3.1': [1, 23],
+        'g3.2': [1, 22],
+        'g3.3': [1, 21],
+        'g3.4': [1, 22],
+        'g3.5': [1, 1],
+        'g3.6': [1, 1],
+        'g3.7': [1, 23],
     }
     for exp_id, num_class in num_classes.items():
         print(f'------------------------------\ntesting exp {exp_id}')

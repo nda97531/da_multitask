@@ -26,7 +26,7 @@ def load_data(folder: str):
 
     """
     train_dict_1 = {0: [], 1: []}  # D1+D2, 2 D1 classes
-    train_dict_2 = defaultdict(list)  # D2, all D2 classes
+    train_dict_2 = defaultdict(list)  # D1+D2, 2 D1 classes + all D2 classes
     valid_dict = {0: [], 1: []}
 
     # GET D2
@@ -63,6 +63,8 @@ def load_data(folder: str):
     # append D1train into train_dict(s)
     train_dict_1[0].append(d1_windows_train[d1_labels_train == 0])
     train_dict_1[1].append(d1_windows_train[d1_labels_train == 1])
+    train_dict_2['nonfall'].append(d1_windows_train[d1_labels_train == 0])
+    train_dict_2['fall'].append(d1_windows_train[d1_labels_train == 1])
 
     # append D1valid into valid dict
     valid_dict[0].append(d1_windows_valid[d1_labels_valid == 0])
@@ -80,7 +82,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', '-d', type=str, required=True)
-    parser.add_argument('--name', '-n', default='g3.1',
+    parser.add_argument('--name', '-n', default='g3.2',
                         help='name of the experiment to create a folder to save weights')
     parser.add_argument('--data-folder', '-data', default='/home/ducanh/projects/npy_data_seq/',
                         help='path to data folder')
