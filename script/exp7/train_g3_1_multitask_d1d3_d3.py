@@ -91,7 +91,7 @@ if __name__ == '__main__':
 
         train_sets = [ResampleArrayDataset(train_dict, augmenter=augmenter) for train_dict in train_dicts]
         valid_set = BasicArrayDataset(valid_dict)
-        train_loaders = [DataLoader(train_set, batch_size=9, shuffle=True) for train_set in train_sets]
+        train_loaders = [DataLoader(train_set, batch_size=8, shuffle=True) for train_set in train_sets]
         valid_loader = DataLoader(valid_set, batch_size=64, shuffle=False)
 
         # create model

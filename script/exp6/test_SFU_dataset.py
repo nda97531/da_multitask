@@ -148,7 +148,7 @@ if __name__ == '__main__':
 
     list_data_files = glob('/home/ducanh/projects/datasets/SFU/parquet/sub*/*/*.parquet')
     # weight_path_pattern = 'draft/{exp_id}/run_{run_id}/{task}_task_last_epoch.pth'
-    weight_path_pattern = 'draft/{exp_id}/run_{run_id}/{task}_task.pth'
+    weight_path_pattern = 'draft/result_exp6/{exp_id}/run_{run_id}/{task}_task.pth'
 
     # key: exp id; value: a dict of {precision, recall, f1score}
     all_results = {}

@@ -1,5 +1,5 @@
 import os
-from collections import defaultdict
+
 import torch
 import torch.nn as nn
 from glob import glob
@@ -12,32 +12,20 @@ from da_multitask.flow.train_flow import TrainFlow
 from da_multitask.flow.torch_callbacks import ModelCheckpoint, EarlyStop
 from da_multitask.networks.complete_model import CompleteModel
 from da_multitask.networks.backbone_tcn import TCN
-from da_multitask.networks.classifier import MultiFCClassifiers
+from da_multitask.networks.classifier import FCClassifier
 
 
 def load_data(folder: str):
     """
     Load all data, 2 classes only (fall and non-fall)
-
     Args:
         folder:
 
     Returns:
 
     """
-    train_dict_1 = {0: [], 1: []}  # D1+D2, 2 D1 classes
-    train_dict_2 = defaultdict(list)  # D2, all D2 classes
+    train_dict = {0: [], 1: []}
     valid_dict = {0: [], 1: []}
-
-    # GET D2
-    files = sorted(glob(f'{folder}/D2/*/*.npy'))
-    print(f'{len(files)} files found for D2')
-    for file in files:
-        arr = np.load(file)[:, :, 1:]
-
-        d2_class = file.split('/')[-2]
-        train_dict_2[f'D2_{d2_class}'].append(arr)
-        train_dict_1[0].append(arr)
 
     # GET D1, both train and valid
     files = sorted(glob(f'{folder}/D1/*/*.npy'))
@@ -51,16 +39,15 @@ def load_data(folder: str):
         file_label = int(os.path.split(file)[0].endswith('_fall'))
         
         if is_train:
-            train_dict_1[file_label].append(arr)
+            train_dict[file_label].append(arr)
         # if is valid
         else:
             valid_dict[file_label].append(arr)
 
-    train_dict_1 = {key: np.concatenate(value) for key, value in train_dict_1.items()}
-    train_dict_2 = {i: np.concatenate(val) for i, val in enumerate(train_dict_2.values())}
+    train_dict = {key: np.concatenate(value) for key, value in train_dict.items()}
     valid_dict = {key: np.concatenate(value) for key, value in valid_dict.items()}
 
-    return [train_dict_1, train_dict_2], valid_dict
+    return train_dict, valid_dict
 
 
 if __name__ == '__main__':
@@ -68,7 +55,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', '-d', type=str, required=True)
-    parser.add_argument('--name', '-n', default='g3.1',
+    parser.add_argument('--name', '-n', default='g1.1',
                         help='name of the experiment to create a folder to save weights')
     parser.add_argument('--data-folder', '-data', default='/home/ducanh/projects/npy_data_seq/',
                         help='path to data folder')
@@ -79,19 +66,19 @@ if __name__ == '__main__':
     # train 3 times
     for _ in range(3):
         # create data loaders
-        train_dicts, valid_dict = load_data(args.data_folder)
+        train_dict, valid_dict = load_data(args.data_folder)
 
         augmenter = ComposeAugmenters(
             p=1,
             augmenters=[
-                Rotate(p=0.5, angle_range=180),
+                Rotate(p=0.5, angle_range=30),
                 # TimeWarp(p=0.5, sigma=0.2, knot_range=4)
             ]
         )
 
-        train_sets = [ResampleArrayDataset(train_dict, augmenter=augmenter) for train_dict in train_dicts]
+        train_set = ResampleArrayDataset(train_dict, augmenter=augmenter)
         valid_set = BasicArrayDataset(valid_dict)
-        train_loaders = [DataLoader(train_set, batch_size=8, shuffle=True) for train_set in train_sets]
+        train_loader = DataLoader(train_set, batch_size=16, shuffle=True)
         valid_loader = DataLoader(valid_set, batch_size=64, shuffle=False)
 
         # create model
@@ -104,9 +91,9 @@ if __name__ == '__main__':
             conv_norm='batch',
             attention_conv_norm='batch'
         )
-        classifier = MultiFCClassifiers(
+        classifier = FCClassifier(
             n_features=128,
-            n_classes=[train_set.num_classes for train_set in train_sets]
+            n_classes=2
         )
         model = CompleteModel(backbone=backbone, classifier=classifier, dropout=0.5)
 
@@ -125,14 +112,14 @@ if __name__ == '__main__':
             model=model, loss_fn=loss_fn, optimizer=optimizer,
             device=args.device,
             callbacks=[
-                ModelCheckpoint(num_epochs, f'{save_folder}/multi_task.pth'),
+                ModelCheckpoint(num_epochs, f'{save_folder}/single_task.pth'),
                 # EarlyStop(10)
             ]
         )
 
         train_log, valid_log = flow.run(
-            train_loader=train_loaders,
-            valid_loader=[valid_loader, None],  # only validate the first task
+            train_loader=train_loader,
+            valid_loader=valid_loader,
             num_epochs=num_epochs
         )
 

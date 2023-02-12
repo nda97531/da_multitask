@@ -41,14 +41,13 @@ class BasicArrayDataset(Dataset):
 
 
 class ResampleArrayDataset(Dataset):
-    def __init__(self, label_data_dict: dict, shuffle: bool = True, augmenter: Augmenter = None):
+    def __init__(self, label_data_dict: dict, augmenter: Augmenter = None, shuffle: bool = True):
         """
 
         Args:
             label_data_dict: key: label (int), value: data [n, ..., channel]
-            shuffle: shuffle data after each epoch
             augmenter:
-
+            shuffle: shuffle data after each epoch            
         """
         self.num_classes = len(label_data_dict)
         self.shuffle = shuffle

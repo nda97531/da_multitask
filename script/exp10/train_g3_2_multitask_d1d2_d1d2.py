@@ -26,7 +26,7 @@ def load_data(folder: str):
 
     """
     train_dict_1 = {0: [], 1: []}  # D1+D2, 2 D1 classes
-    train_dict_2 = defaultdict(list)  # D2, all D2 classes
+    train_dict_2 = defaultdict(list)  # D1+D2, 2 D1 classes + all D2 classes
     valid_dict = {0: [], 1: []}
 
     # GET D2
@@ -34,7 +34,6 @@ def load_data(folder: str):
     print(f'{len(files)} files found for D2')
     for file in files:
         arr = np.load(file)[:, :, 1:]
-
         d2_class = file.split('/')[-2]
         train_dict_2[f'D2_{d2_class}'].append(arr)
         train_dict_1[0].append(arr)
@@ -42,24 +41,39 @@ def load_data(folder: str):
     # GET D1, both train and valid
     files = sorted(glob(f'{folder}/D1/*/*.npy'))
     print(f'{len(files)} files found for D1')
-    for i, file in enumerate(files):
+
+    # read all files in D1
+    d1_windows = []
+    d1_labels = []
+    for file in files:
         arr = np.load(file)[:, :, 1:]
-
-        # use this file (sequence) for train or valid
-        is_train = (i % 2 == 0)
-        # get label: fall: 1; non-fall: 0
         file_label = int(os.path.split(file)[0].endswith('_fall'))
-        
-        if is_train:
-            train_dict_1[file_label].append(arr)
-        # if is valid
-        else:
-            valid_dict[file_label].append(arr)
+        d1_windows.append(arr)
+        d1_labels += [file_label] * len(arr)
+    d1_windows = np.concatenate(d1_windows)
+    d1_labels = np.array(d1_labels)
 
+    # split D1 into train and valid
+    train_idx = np.arange(len(d1_windows)) % 2 != 0
+    d1_windows_train = d1_windows[train_idx]
+    d1_labels_train = d1_labels[train_idx]
+    d1_windows_valid = d1_windows[~train_idx]
+    d1_labels_valid = d1_labels[~train_idx]
+
+    # append D1train into train_dict(s)
+    train_dict_1[0].append(d1_windows_train[d1_labels_train == 0])
+    train_dict_1[1].append(d1_windows_train[d1_labels_train == 1])
+    train_dict_2['nonfall'].append(d1_windows_train[d1_labels_train == 0])
+    train_dict_2['fall'].append(d1_windows_train[d1_labels_train == 1])
+
+    # append D1valid into valid dict
+    valid_dict[0].append(d1_windows_valid[d1_labels_valid == 0])
+    valid_dict[1].append(d1_windows_valid[d1_labels_valid == 1])
+
+    # return result
     train_dict_1 = {key: np.concatenate(value) for key, value in train_dict_1.items()}
     train_dict_2 = {i: np.concatenate(val) for i, val in enumerate(train_dict_2.values())}
     valid_dict = {key: np.concatenate(value) for key, value in valid_dict.items()}
-
     return [train_dict_1, train_dict_2], valid_dict
 
 
@@ -68,7 +82,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', '-d', type=str, required=True)
-    parser.add_argument('--name', '-n', default='g3.1',
+    parser.add_argument('--name', '-n', default='g3.2',
                         help='name of the experiment to create a folder to save weights')
     parser.add_argument('--data-folder', '-data', default='/home/ducanh/projects/npy_data_seq/',
                         help='path to data folder')
@@ -98,7 +112,7 @@ if __name__ == '__main__':
         backbone = TCN(
             input_shape=(200, 3),
             how_flatten='spatial attention gap',
-            n_tcn_channels=(64,) * 5 + (128,) * 2,
+            n_tcn_channels=(64,)*5 + (128,)*2,
             tcn_drop_rate=0.5,
             use_spatial_dropout=False,
             conv_norm='batch',
@@ -106,7 +120,7 @@ if __name__ == '__main__':
         )
         classifier = MultiFCClassifiers(
             n_features=128,
-            n_classes=[train_set.num_classes for train_set in train_sets]
+            n_classes=[train_set.num_classes if train_set.num_classes > 2 else 1 for train_set in train_sets]
         )
         model = CompleteModel(backbone=backbone, classifier=classifier, dropout=0.5)
 
@@ -117,7 +131,7 @@ if __name__ == '__main__':
         save_folder = f'{save_folder}/run_{last_run}'
 
         # create training config
-        loss_fn = nn.CrossEntropyLoss()
+        loss_fn = 'classification_auto'
         optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
         num_epochs = 40
 

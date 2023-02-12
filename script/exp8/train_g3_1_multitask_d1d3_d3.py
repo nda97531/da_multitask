@@ -89,7 +89,7 @@ if __name__ == '__main__':
             ]
         )
 
-        train_sets = [ResampleArrayDataset(train_dict, augmenter=augmenter) for train_dict in train_dicts]
+        train_sets = [BasicArrayDataset(train_dict, augmenter=augmenter) for train_dict in train_dicts]
         valid_set = BasicArrayDataset(valid_dict)
         train_loaders = [DataLoader(train_set, batch_size=8, shuffle=True) for train_set in train_sets]
         valid_loader = DataLoader(valid_set, batch_size=64, shuffle=False)
@@ -106,7 +106,7 @@ if __name__ == '__main__':
         )
         classifier = MultiFCClassifiers(
             n_features=128,
-            n_classes=[train_set.num_classes for train_set in train_sets]
+            n_classes=[train_set.num_classes if train_set.num_classes > 2 else 1 for train_set in train_sets]
         )
         model = CompleteModel(backbone=backbone, classifier=classifier, dropout=0.5)
 
@@ -117,7 +117,7 @@ if __name__ == '__main__':
         save_folder = f'{save_folder}/run_{last_run}'
 
         # create training config
-        loss_fn = nn.CrossEntropyLoss()
+        loss_fn = 'classification_auto'
         optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
         num_epochs = 40
 

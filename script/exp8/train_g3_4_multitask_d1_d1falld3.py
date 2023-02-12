@@ -25,8 +25,8 @@ def load_data(folder: str):
     Returns:
 
     """
-    train_dict_1 = {0: [], 1: []}  # D1+D2, 2 D1 classes
-    train_dict_2 = defaultdict(list)  # D2, all D2 classes
+    train_dict_1 = {0: [], 1: []}  # D1, 2 D1 classes
+    train_dict_2 = {0: [], 1: []}  # D1fall+D2, 2 D1 classes
     valid_dict = {0: [], 1: []}
 
     # GET D2
@@ -34,10 +34,7 @@ def load_data(folder: str):
     print(f'{len(files)} files found for D2')
     for file in files:
         arr = np.load(file)[:, :, 1:]
-
-        d2_class = file.split('/')[-2]
-        train_dict_2[f'D2_{d2_class}'].append(arr)
-        train_dict_1[0].append(arr)
+        train_dict_2[0].append(arr)
 
     # GET D1, both train and valid
     files = sorted(glob(f'{folder}/D1/*/*.npy'))
@@ -52,6 +49,9 @@ def load_data(folder: str):
         
         if is_train:
             train_dict_1[file_label].append(arr)
+            # only add fall from D1 to train_dict_2
+            if file_label:
+                train_dict_2[file_label].append(arr)
         # if is valid
         else:
             valid_dict[file_label].append(arr)
@@ -68,7 +68,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', '-d', type=str, required=True)
-    parser.add_argument('--name', '-n', default='g3.1',
+    parser.add_argument('--name', '-n', default='g3.4',
                         help='name of the experiment to create a folder to save weights')
     parser.add_argument('--data-folder', '-data', default='/home/ducanh/projects/npy_data_seq/',
                         help='path to data folder')
@@ -89,7 +89,7 @@ if __name__ == '__main__':
             ]
         )
 
-        train_sets = [ResampleArrayDataset(train_dict, augmenter=augmenter) for train_dict in train_dicts]
+        train_sets = [BasicArrayDataset(train_dict, augmenter=augmenter) for train_dict in train_dicts]
         valid_set = BasicArrayDataset(valid_dict)
         train_loaders = [DataLoader(train_set, batch_size=8, shuffle=True) for train_set in train_sets]
         valid_loader = DataLoader(valid_set, batch_size=64, shuffle=False)
@@ -106,7 +106,7 @@ if __name__ == '__main__':
         )
         classifier = MultiFCClassifiers(
             n_features=128,
-            n_classes=[train_set.num_classes for train_set in train_sets]
+            n_classes=[train_set.num_classes if train_set.num_classes > 2 else 1 for train_set in train_sets]
         )
         model = CompleteModel(backbone=backbone, classifier=classifier, dropout=0.5)
 
@@ -117,7 +117,7 @@ if __name__ == '__main__':
         save_folder = f'{save_folder}/run_{last_run}'
 
         # create training config
-        loss_fn = nn.CrossEntropyLoss()
+        loss_fn = 'classification_auto'
         optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
         num_epochs = 40
 

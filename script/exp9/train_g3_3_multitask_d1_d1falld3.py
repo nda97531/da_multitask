@@ -25,8 +25,8 @@ def load_data(folder: str):
     Returns:
 
     """
-    train_dict_1 = {0: [], 1: []}  # D1+D2, 2 D1 classes
-    train_dict_2 = defaultdict(list)  # D2, all D2 classes
+    train_dict_1 = {0: [], 1: []}  # D1, 2 D1 classes
+    train_dict_2 = defaultdict(list)  # D1fall+D2, Fall + all D2 classes
     valid_dict = {0: [], 1: []}
 
     # GET D2
@@ -37,7 +37,6 @@ def load_data(folder: str):
 
         d2_class = file.split('/')[-2]
         train_dict_2[f'D2_{d2_class}'].append(arr)
-        train_dict_1[0].append(arr)
 
     # GET D1, both train and valid
     files = sorted(glob(f'{folder}/D1/*/*.npy'))
@@ -52,6 +51,9 @@ def load_data(folder: str):
         
         if is_train:
             train_dict_1[file_label].append(arr)
+            # only add fall from D1 to train_dict_2
+            if file_label:
+                train_dict_2[file_label].append(arr)
         # if is valid
         else:
             valid_dict[file_label].append(arr)
@@ -68,7 +70,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', '-d', type=str, required=True)
-    parser.add_argument('--name', '-n', default='g3.1',
+    parser.add_argument('--name', '-n', default='g3.3',
                         help='name of the experiment to create a folder to save weights')
     parser.add_argument('--data-folder', '-data', default='/home/ducanh/projects/npy_data_seq/',
                         help='path to data folder')
@@ -84,7 +86,7 @@ if __name__ == '__main__':
         augmenter = ComposeAugmenters(
             p=1,
             augmenters=[
-                Rotate(p=0.5, angle_range=180),
+                Rotate(p=0.5, angle_range=30),
                 # TimeWarp(p=0.5, sigma=0.2, knot_range=4)
             ]
         )

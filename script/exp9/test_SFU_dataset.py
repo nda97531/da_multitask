@@ -109,9 +109,8 @@ def test_single_task(model: nn.Module, list_data_files: list, device: str = 'cpu
             label = get_label_from_file_path(file)
 
             # predict fall (positive-1) if there's any positive window
-            pred = model(data).squeeze(1)
-            assert len(pred.shape) == 1
-            pred = (tr.sigmoid(pred) > 0.5).any().item()
+            # pred = model(data).argmax(1).any().item()
+            pred = (model(data).squeeze(1) > 0.5).any().item()
 
             y_true.append(label)
             y_pred.append(pred)
@@ -134,10 +133,10 @@ def test_multitask(model: nn.Module, list_data_files: list, device: str = 'cpu')
             pred = model(
                 data,
                 classifier_kwargs={'mask': tr.zeros(len(data), dtype=tr.int)}
-            )[0].squeeze(1)
+            )[0]
             # predict fall (positive-1) if there's any positive window
-            assert len(pred.shape) == 1
-            pred = (tr.sigmoid(pred) > 0.5).any().item()
+            # pred = pred.argmax(1).any().item()
+            pred = (tr.sigmoid(pred.squeeze(1)) > 0.5).any().item()
 
             y_true.append(label)
             y_pred.append(pred)
@@ -151,15 +150,15 @@ if __name__ == '__main__':
 
     list_data_files = glob('/home/ducanh/projects/datasets/SFU/parquet/sub*/*/*.parquet')
     # weight_path_pattern = 'draft/{exp_id}/run_{run_id}/{task}_task_last_epoch.pth'
-    weight_path_pattern = 'draft/result_exp7_bceloss/{exp_id}/run_{run_id}/{task}_task.pth'
+    weight_path_pattern = 'draft/{exp_id}/run_{run_id}/{task}_task.pth'
 
     # key: exp id; value: a dict of {precision, recall, f1score}
     all_results = {}
 
     # region: test single task
     exps = [
-        'g1.1',
-        'g1.2'
+        # 'g1.1',
+        # 'g1.2'
     ]
     for exp_id in exps:
         print(f'------------------------------\ntesting exp {exp_id}')
@@ -184,13 +183,13 @@ if __name__ == '__main__':
     
     # region: test multi task
     num_classes = {
-        'g2.1': [1, 21],
+        # 'g2.1': [2, 21],
         # 'g2.2': [2, 11],
         # 'g2.3': [2, 21, 11],
         # 'g3.1': [2, 21],
         # 'g3.2': [2, 23],
-        'g3.3': [1, 22],
-        'g3.4': [1, 1]
+        'g3.3180w': [1, 22],
+        # 'g3.4': [2, 2]
     }
     for exp_id, num_class in num_classes.items():
         print(f'------------------------------\ntesting exp {exp_id}')
