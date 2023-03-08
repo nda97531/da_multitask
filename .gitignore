@@ -1,5 +1,6 @@
 draft*
 .idea
+.vscode
 
 *.npy
 

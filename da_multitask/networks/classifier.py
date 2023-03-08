@@ -1,5 +1,6 @@
 import torch as tr
 import torch.nn as nn
+from typing import Union
 
 
 class FCClassifier(nn.Module):
@@ -31,17 +32,21 @@ class MultiFCClassifiers(nn.Module):
         for n_c in n_classes:
             self.fcs.append(nn.Linear(n_features, n_c))
 
-    def forward(self, x, mask: tr.Tensor):
+    def forward(self, x, mask: Union[tr.Tensor, str]):
         """
 
         Args:
             x: input tensor
-            mask: an integer Tensor containing classifier index for each sample in x
+            mask: an integer Tensor containing classifier index for each sample in x;
+                if 'all', then all data will be passed through all classifiers
 
         Returns:
             a tuple, element at index I
         """
-        output = tuple(self.fcs[i](x[mask == i]) for i in range(len(self.fcs)))
+        if mask == 'all':
+            output = tuple(self.fcs[i](x) for i in range(len(self.fcs)))
+        else:
+            output = tuple(self.fcs[i](x[mask == i]) for i in range(len(self.fcs)))
         return output
 
 

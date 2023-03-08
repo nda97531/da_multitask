@@ -22,6 +22,7 @@ class ModelCheckpoint(TorchCallback):
         self.save_best_only = save_best_only
         self.save_weights_only = save_weights_only
         self.current_best_result = float('inf')
+        self.current_best_epoch = -1
 
         os.makedirs(os.path.split(self.save_path)[0], exist_ok=True)
 
@@ -43,6 +44,10 @@ class ModelCheckpoint(TorchCallback):
             print(f"Model improved from {self.current_best_result} to {new_result}. "
                   f"Save model to {save_path}.")
             self.current_best_result = new_result
+            self.current_best_epoch = epoch
+
+        else:
+            print(f'Not improved from {self.current_best_result} at epoch {self.current_best_epoch}')
 
         # save last epoch
         if self.num_epochs == epoch:
