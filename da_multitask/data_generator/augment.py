@@ -118,7 +118,7 @@ class Rotate(Augmenter):
         :return: array shape (time step, channel)
         """
         assert (len(org_data.shape) >= 2) and (org_data.shape[-1] % 3 == 0), \
-            "expected data shape: [*, any length, channel%3==0]"
+            f"expected data shape: [*, any length, channel%3==0], got {org_data.shape}"
 
         angle = np.random.uniform(low=self.angle_range[0], high=self.angle_range[1])
         direction_vector = np.random.uniform(-1, 1, size=3)
