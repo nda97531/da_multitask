@@ -2,6 +2,8 @@ import torch as tr
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from loguru import logger
+
 from .conv import Conv1dBlock
 from .conv_attention import CBAM, SpatialGate, ChannelGate
 
@@ -23,6 +25,9 @@ class TCN(nn.Module):
         self.B = len(n_tcn_channels)
         self.N = 2
         self.k = tcn_kernel_size
+
+        if self.receptive_field() < input_shape[0]:
+            logger.warning(f'Receptive field is smaller than input size: {self.receptive_field()} < {input_shape[0]}')
 
         layers = []
         for i in range(len(n_tcn_channels)):

@@ -3,6 +3,26 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 
 
+def np_mode(array: np.ndarray, exclude_nan: bool = True) -> any:
+    """
+    Find mode value in a 1D array
+
+    Args:
+        array: an array of any shape, but it will be treated as a 1D array
+        exclude_nan: whether to exclude nan values when finding mode
+
+    Returns:
+        the mode value, if `exclude_nan` is True and the whole input array is NaN, return None
+    """
+    if exclude_nan:
+        array = array[~np.isnan(array)]
+        if len(array) == 0:
+            return None
+    val, count = np.unique(array, return_counts=True)
+    mode_ = val[np.argmax(count)]
+    return mode_
+
+
 def gen_random_curves(length: int, num_curves: int, sigma=0.2, knot=4):
     """
 

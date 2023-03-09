@@ -61,9 +61,7 @@ class TrainFlow:
             # if binary classification
             else:
                 y_pred = (tr.sigmoid(y_pred.squeeze(1)) >= 0.5).long()
-        
         return f1_score(y_true, y_pred, average='macro')
-
 
     def train_loop(self, dataloader: DataLoader):
         self.model = self.model.train()

@@ -1,13 +1,12 @@
 import os
 import re
-
-import matplotlib.pyplot as plt
 import numpy as np
 from glob import glob
 import pandas as pd
 import polars as pl
 from collections import defaultdict
 from tqdm import tqdm
+import zipfile
 
 from public_datasets.constant import G_TO_MS2
 from utils.pd_dataframe import interpolate_numeric_df, write_df_file
@@ -574,6 +573,86 @@ class SFI(QuickProcess):
             self._write_parquet(df, file)
 
 
+class CMDFall(QuickProcess):
+    USED_KINECT_ID = 3
+
+    def get_info_from_filename(self, filename: str):
+        filename = os.path.split(filename)[1]
+        info = re.match('S([0-9]*)P([0-9]*)(?:[K,I])([0-9]*).txt', filename)
+        setup_id = int(info.group(1))
+        person_id = int(info.group(2))
+        device_id = int(info.group(3))
+        return setup_id, person_id, device_id
+
+    def read_label_df(self):
+        # read label df
+        all_label = pl.read_csv(f'{self.raw_folder}/annotation.csv')
+        all_label = all_label.filter(pl.col('kinect_id') == self.USED_KINECT_ID)  # .drop('kinect_id')
+
+        # convert frame ID to timestamp
+        skeleton_files = glob(f'{self.raw_folder}/skeleton/S*P*K{self.USED_KINECT_ID}.txt')
+        for skeleton_file in skeleton_files:
+            session_ts = pl.read_csv(skeleton_file, columns=['timestamp', 'frame_index'])
+            setup_id, person_id, kinect_id = self.get_info_from_filename(skeleton_file)
+            session_label = all_label.filter((pl.col('setup_id') == setup_id) & (pl.col('subject_id') == person_id))
+            session_label = session_label.join(session_ts, left_on='start_frame', right_on='frame_index',
+                                               how='left').rename({'timestamp': 'start_msec'})
+            session_label = session_label.join(session_ts, left_on='stop_frame', right_on='frame_index',
+                                               how='left').rename({'timestamp': 'stop_msec'})
+            session_label = session_label.to_pandas()
+            session_ts = session_ts.to_pandas()
+            _ = 1
+
+    def run(self):
+        label_df = self.read_label_df()
+
+
+class RealWorld(QuickProcess):
+
+    def unzip_data(self):
+        """
+        Unzip raw data
+
+        Returns:
+            list of written files
+        """
+        pattern = f'{self.raw_folder}/proband*/data/acc_*_csv.zip'
+        files = glob(pattern)
+        print(f'Found {len(files)} acc zip files')
+
+        for file in files:
+            waist_file_name = os.path.splitext(os.path.split(file)[-1])[0].replace('csv', 'waist.csv')
+            proband_id = file.split('/')[-3]
+            destination_file = f'{self.destination_folder}/{proband_id}/{waist_file_name}'
+            if os.path.exists(destination_file):
+                continue
+
+            with zipfile.ZipFile(file, 'r') as zip_ref:
+                try:
+                    zip_ref.extract(*os.path.split(destination_file)[::-1])
+                except KeyError:
+                    try:
+                        zip_ref.extract(waist_file_name.replace('waist.csv', '2_waist.csv'),
+                                        f'{self.destination_folder}/{proband_id}')
+                    except KeyError:
+                        print('error:', file)
+
+    def run(self):
+        list_csv = glob(f'{self.destination_folder}/proband*/*.csv')
+        print(f'Found {len(list_csv)} acc csv files')
+
+        for csv_file in list_csv:
+            df = pl.read_csv(csv_file, columns=['attr_time', 'attr_x', 'attr_y', 'attr_z'])
+            df = df.rename({'attr_time': 'msec',
+                            'attr_x': 'acc_x',
+                            'attr_y': 'acc_y',
+                            'attr_z': 'acc_z'})
+            df = df.with_columns(pl.col(['acc_x', 'acc_y', 'acc_z']) / G_TO_MS2)
+            df = self.resample(df.to_pandas(), timestamp_col='msec')
+            df.to_parquet(csv_file.removesuffix('csv') + 'parquet', index=False)
+            os.remove(csv_file)
+
+
 if __name__ == '__main__':
     pass
     # URFall(
@@ -597,9 +676,16 @@ if __name__ == '__main__':
     #     signal_freq=50, window_size_sec=4
     # ).run()
 
-    MobiActV2(
-        raw_folder='/mnt/data_drive/projects/raw datasets/MobiAct2/MobiAct_Dataset_v2.0/Annotated Data',
-        name='MobiActV2',
+    # MobiActV2(
+    #     raw_folder='/mnt/data_drive/projects/raw datasets/MobiAct2/MobiAct_Dataset_v2.0/Annotated Data',
+    #     name='MobiActV2',
+    #     destination_folder='/mnt/data_drive/projects/npy_data_seq',
+    #     signal_freq=50, window_size_sec=4
+    # ).run()
+
+    CMDFall(
+        raw_folder='/mnt/data_drive/projects/raw datasets/CMDFall/',
+        name='CMDFall',
         destination_folder='/mnt/data_drive/projects/npy_data_seq',
         signal_freq=50, window_size_sec=4
     ).run()
@@ -609,5 +695,12 @@ if __name__ == '__main__':
     #     raw_folder='/mnt/data_drive/projects/datasets/SFU-IMU Dataset/raw',
     #     name='SFI',
     #     destination_folder='/mnt/data_drive/projects/datasets/SFU-IMU Dataset/parquet',
+    #     signal_freq=50  # , window_size_sec=4
+    # ).run()
+
+    # RealWorld(
+    #     raw_folder='/mnt/data_drive/projects/raw datasets/realworld2016_dataset/raw',
+    #     name='RealWorld',
+    #     destination_folder='/mnt/data_drive/projects/raw datasets/realworld2016_dataset/parquet',
     #     signal_freq=50  # , window_size_sec=4
     # ).run()
