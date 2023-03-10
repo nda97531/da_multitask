@@ -2,11 +2,10 @@ import pandas as pd
 import numpy as np
 from typing import List, Union, Tuple
 import torch as tr
-import torch.nn.functional as F
 from tqdm import tqdm
-from sklearn.metrics import f1_score
 from torch.utils.data import DataLoader
 
+from da_multitask.flow.flow_functions import auto_classification_loss, cal_f1_score
 from da_multitask.flow.torch_callbacks import TorchCallback, CallbackAction
 
 
@@ -19,49 +18,12 @@ class TrainFlow:
         self.model = model.to(device)
         self.optimizer = optimizer
         self.device = device
-        self.loss_fn = self.auto_classification_loss if loss_fn == 'classification_auto' else loss_fn
+        self.loss_fn = auto_classification_loss if loss_fn == 'classification_auto' else loss_fn
 
         self.train_log = []
         self.valid_log = []
 
         self.callbacks = callbacks
-
-    @staticmethod
-    def auto_classification_loss(inp: tr.Tensor, target: tr.Tensor):
-
-        if len(inp.shape) > 1:
-            # if multi-class classification
-            if inp.shape[1] > 1:
-                loss = F.cross_entropy(inp, target)
-                return loss
-            else:
-                inp = inp.squeeze(1)
-
-        # if binary classification
-        loss = F.binary_cross_entropy_with_logits(inp, target.float())
-        return loss
-
-    def cal_metric(self, y_true, y_pred):
-        """
-        Calculate F1 score
-
-        Args:
-            y_true: 1d array/tensor shape [num samples]
-            y_pred: 2d array/tensor shape [num samples, num class], if num class==1, treat this as a 
-                probability array for binary classification; if 1d array, treat as categorical
-
-        Returns:
-            float: f1 score
-        """
-        if len(y_pred.shape) > 1:
-            # if multi-class classification
-            if y_pred.shape[1] > 1:
-                return f1_score(y_true, y_pred.argmax(1), average='macro')
-
-            # if binary classification
-            else:
-                y_pred = (tr.sigmoid(y_pred.squeeze(1)) >= 0.5).long()
-        return f1_score(y_true, y_pred, average='macro')
 
     def train_loop(self, dataloader: DataLoader):
         self.model = self.model.train()
@@ -93,7 +55,7 @@ class TrainFlow:
 
         # record epoch log
         train_loss /= len(dataloader)
-        metric = self.cal_metric(tr.concatenate(y_true), tr.concatenate(y_pred))
+        metric = cal_f1_score(tr.concatenate(y_true), tr.concatenate(y_pred))
         self.train_log.append({'loss': train_loss, 'metric': metric})
         print(f'Train: {self.train_log[-1]}')
 
@@ -146,8 +108,8 @@ class TrainFlow:
         train_loss /= num_iter
         y_true = [tr.concatenate(cls) for cls in y_true]
         y_pred = [tr.concatenate(cls) for cls in y_pred]
-        metrics = [self.cal_metric(y_true[i], y_pred[i]) for i in range(len(y_true))]
-        self.train_log.append({'loss': train_loss} | {f'metric_task_{i}': metrics[i] for i in range(len(metrics))})
+        metrics = [cal_f1_score(y_true[i], y_pred[i]) for i in range(len(y_true))]
+        self.train_log.append({'loss': train_loss} | {f'metric_task_{i}': metric for i, metric in enumerate(metrics)})
         print(f'Train: {self.train_log[-1]}')
 
     def valid_loop(self, dataloader: DataLoader):
@@ -170,7 +132,7 @@ class TrainFlow:
         valid_loss /= num_batches
         y_true = tr.concatenate(y_true).to('cpu')
         y_pred = tr.concatenate(y_pred).to('cpu')
-        metric = self.cal_metric(y_true, y_pred)
+        metric = cal_f1_score(y_true, y_pred)
 
         # record epoch log
         self.valid_log.append({'loss': valid_loss, 'metric': metric})
@@ -188,7 +150,7 @@ class TrainFlow:
         self.model = self.model.eval()
 
         # list of metric values of all tasks
-        metrics = [list() for _ in dataloaders]
+        metrics = []
         valid_loss = 0
         num_task = 0
 
@@ -216,16 +178,16 @@ class TrainFlow:
             task_loss /= num_batches
             y_true = tr.concatenate(y_true).to('cpu')
             y_pred = tr.concatenate(y_pred).to('cpu')
-            metric = self.cal_metric(y_true, y_pred)
+            metric = cal_f1_score(y_true, y_pred)
 
             # record log for all tasks
             valid_loss += task_loss
             num_task += 1
-            metrics[i] = metric
+            metrics.append(metric)
 
         # record epoch log
         valid_loss /= num_task
-        self.valid_log.append({'loss': valid_loss} | {f'metric_task_{i}': metrics[i] for i in range(len(metrics))})
+        self.valid_log.append({'loss': valid_loss} | {f'metric_task_{i}': metric for i, metric in enumerate(metrics)})
         print(f'Valid: {self.valid_log[-1]}')
 
     def run_callbacks(self, epoch: int) -> List[CallbackAction]:

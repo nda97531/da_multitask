@@ -1,16 +1,17 @@
 from typing import List
 import torch as tr
 import torch.nn as nn
-from sklearn.metrics import classification_report
 from torch.utils.data import DataLoader
+
+from da_multitask.flow.flow_functions import auto_classification_loss, classification_report, ypred_2_categorical
 
 
 class TestFlow:
-    def __init__(self, device: str, loss_fn: nn.Module):
+    def __init__(self, device: str, loss_fn: nn.Module = 'classification_auto'):
         self.device = device
-        self.loss_fn = loss_fn
+        self.loss_fn = auto_classification_loss if loss_fn == 'classification_auto' else loss_fn
 
-    def run_single_task(self, model: nn.Module, dataloader: DataLoader):
+    def run_single_task(self, model: nn.Module, dataloader: DataLoader) -> tuple:
         """
 
         Args:
@@ -18,7 +19,7 @@ class TestFlow:
             dataloader:
 
         Returns:
-
+            a 2-element tuple: (y_true, y_pred), both are categorical 1D array
         """
         model = model.eval()
 
@@ -38,11 +39,12 @@ class TestFlow:
 
         test_loss /= num_batches
         y_true = tr.concatenate(y_true).to('cpu')
-        y_pred = tr.concatenate(y_pred).argmax(1).to('cpu')
+        y_pred = ypred_2_categorical(tr.concatenate(y_pred).to('cpu'))
         print(f'Loss: {test_loss}')
         print(classification_report(y_true, y_pred))
+        return y_true, y_pred
 
-    def run_multitask(self, model: nn.Module, dataloaders: List[DataLoader]):
+    def run_multitask(self, model: nn.Module, dataloaders: List[DataLoader]) -> tuple:
         """
         
         Args:
@@ -50,9 +52,12 @@ class TestFlow:
             dataloaders: 
 
         Returns:
-
+            a 2-level tuple:
+                level 1: each element is a task
+                level 2: (y_true, y_pred), both are categorical 1D array
         """
         model = model.eval()
+        result = []
 
         # for each task
         for i, dataloader in enumerate(dataloaders):
@@ -78,6 +83,8 @@ class TestFlow:
             # calculate log for one task
             task_loss /= num_batches
             y_true = tr.concatenate(y_true).to('cpu')
-            y_pred = tr.concatenate(y_pred).argmax(1).to('cpu')
+            y_pred = ypred_2_categorical(tr.concatenate(y_pred).to('cpu'))
             print(f'Loss: {task_loss}')
             print(classification_report(y_true, y_pred))
+            result.append((y_true, y_pred))
+        return tuple(result)
