@@ -34,7 +34,7 @@ class TrainFlow:
 
         pbar = tqdm(total=len(dataloader), ncols=0)
         for batch, (x, y) in enumerate(dataloader):
-            x = x.float().to(self.device)
+            x = x.to(self.device)
             y = y.to(self.device)
             # Compute prediction and loss
             pred = self.model(x)
@@ -73,7 +73,7 @@ class TrainFlow:
             # load data
             data = [next(dataloader) for dataloader in dataloaders]
             x, y = tuple(zip(*data))
-            x = tr.concatenate(x).float().to(self.device)
+            x = tr.concatenate(x).to(self.device)
             y = tr.concatenate(y).to(self.device)
 
             # generate task mask: a 1D array containing a task number for each sample
@@ -122,7 +122,7 @@ class TrainFlow:
         y_pred = []
         with tr.no_grad():
             for x, y in dataloader:
-                x = x.float().to(self.device)
+                x = x.to(self.device)
                 y = y.to(self.device)
                 pred = self.model(x)
                 valid_loss += self.loss_fn(pred, y).item()
@@ -166,7 +166,7 @@ class TrainFlow:
             y_pred = []
             with tr.no_grad():
                 for x, y in dataloader:
-                    x = x.float().to(self.device)
+                    x = x.to(self.device)
                     y = y.to(self.device)
                     pred = self.model(x, classifier_kwargs={'mask': tr.tensor([i] * len(y))})
                     pred = pred[i]

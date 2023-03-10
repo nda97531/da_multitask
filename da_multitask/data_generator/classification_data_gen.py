@@ -6,17 +6,21 @@ from da_multitask.data_generator.augment import Augmenter
 
 
 class BasicArrayDataset(Dataset):
-    def __init__(self, label_data_dict: dict, augmenter: Augmenter = None):
+    def __init__(self, label_data_dict: dict, augmenter: Augmenter = None, float_precision: str = 'float32'):
         """
 
         Args:
             label_data_dict: key: label (int), value: data [n, ..., channel]
+            augmenter: Augmenter object
+            float_precision: convert data array into this data type, default is 'float32'
         """
         print('Label distribution:')
         for k, v in label_data_dict.items():
             print(k, ':', len(v))
 
         self.augmenter = augmenter
+        self.float_precision = float_precision
+
         self.num_classes = len(label_data_dict)
         self.data = []
         self.label = []
@@ -34,24 +38,28 @@ class BasicArrayDataset(Dataset):
         if self.augmenter is not None:
             data = self.augmenter.apply(data)
         label = self.label[index]
-        return data, label
+        return data.astype(self.float_precision), label
 
     def __len__(self) -> int:
         return len(self.label)
 
 
 class ResampleArrayDataset(Dataset):
-    def __init__(self, label_data_dict: dict, augmenter: Augmenter = None, shuffle: bool = True):
+    def __init__(self, label_data_dict: dict, augmenter: Augmenter = None, shuffle: bool = True,
+                 float_precision: str = 'float32'):
         """
 
         Args:
             label_data_dict: key: label (int), value: data [n, ..., channel]
-            augmenter:
-            shuffle: shuffle data after each epoch            
+            augmenter: Augmenter object
+            shuffle: shuffle data after each epoch
+            float_precision: convert data array into this data type, default is 'float32'
         """
         self.num_classes = len(label_data_dict)
         self.shuffle = shuffle
         self.augmenter = augmenter
+        self.float_precision = float_precision
+
         # key: label (int); value: data [n, ..., channel]
         self.label_data_dict = label_data_dict
         # key: label; value: index of the last called instance
@@ -79,7 +87,7 @@ class ResampleArrayDataset(Dataset):
             self.label_pick_idx[label] = 0
             self._shuffle_class_index(label)
 
-        return data, label
+        return data.astype(self.float_precision), label
 
     def _shuffle_class_index(self, cls: int):
         if self.shuffle:
