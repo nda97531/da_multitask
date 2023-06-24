@@ -637,6 +637,7 @@ if __name__ == '__main__':
     # ).run()
 
     KFall(
+        max_window_per_fall=3,
         raw_folder='/mnt/data_drive/projects/raw datasets/KFall/',
         name='KFall',
         destination_folder='/mnt/data_drive/projects/npy_data_seq',
