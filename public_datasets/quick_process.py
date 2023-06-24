@@ -295,10 +295,11 @@ class KFall(QuickProcess):
         all_fall_sequences = []
         all_adl_sequences = defaultdict(list)
 
-        # go through all sequence files
+        # go through all subjects
         for subject_id in tqdm(sorted(os.listdir(self.raw_data_folder))):
             label_df = self._read_label(f'{self.raw_label_folder}/{subject_id}_label.xlsx')
 
+            # for each session of this subject
             for session_file in sorted(glob(f'{self.raw_data_folder}/{subject_id}/*.csv')):
                 session_data_df = self._read_data(session_file)
                 subject_id, task_id, trial_id = self._get_session_info(session_file.split('/')[-1][:-4])
@@ -307,7 +308,8 @@ class KFall(QuickProcess):
                 if task_id in self.FALL_TASK_ID:
                     label_row = label_df.loc[(label_df['Task ID'] == int(task_id)) &
                                              (label_df['Trial ID'] == int(trial_id))]
-                    assert label_row.shape[0] == 1, f'Something is wrong with session {session_file}'
+                    assert label_row.shape[0] == 1, f'Each session is represented by only 1 row in the label file. ' \
+                                                    f'But {label_row.shape[0]} rows found for session {session_file}'
                     fall_window = self._get_fall_window(session_data_df, label_row.iloc[0])
                     all_fall_sequences.append(fall_window)
                 # if this is an ADL session
@@ -573,40 +575,6 @@ class SFI(QuickProcess):
             self._write_parquet(df, file)
 
 
-class CMDFall(QuickProcess):
-    USED_KINECT_ID = 3
-
-    def get_info_from_filename(self, filename: str):
-        filename = os.path.split(filename)[1]
-        info = re.match('S([0-9]*)P([0-9]*)(?:[K,I])([0-9]*).txt', filename)
-        setup_id = int(info.group(1))
-        person_id = int(info.group(2))
-        device_id = int(info.group(3))
-        return setup_id, person_id, device_id
-
-    def read_label_df(self):
-        # read label df
-        all_label = pl.read_csv(f'{self.raw_folder}/annotation.csv')
-        all_label = all_label.filter(pl.col('kinect_id') == self.USED_KINECT_ID)  # .drop('kinect_id')
-
-        # convert frame ID to timestamp
-        skeleton_files = glob(f'{self.raw_folder}/skeleton/S*P*K{self.USED_KINECT_ID}.txt')
-        for skeleton_file in skeleton_files:
-            session_ts = pl.read_csv(skeleton_file, columns=['timestamp', 'frame_index'])
-            setup_id, person_id, kinect_id = self.get_info_from_filename(skeleton_file)
-            session_label = all_label.filter((pl.col('setup_id') == setup_id) & (pl.col('subject_id') == person_id))
-            session_label = session_label.join(session_ts, left_on='start_frame', right_on='frame_index',
-                                               how='left').rename({'timestamp': 'start_msec'})
-            session_label = session_label.join(session_ts, left_on='stop_frame', right_on='frame_index',
-                                               how='left').rename({'timestamp': 'stop_msec'})
-            session_label = session_label.to_pandas()
-            session_ts = session_ts.to_pandas()
-            _ = 1
-
-    def run(self):
-        label_df = self.read_label_df()
-
-
 class RealWorld(QuickProcess):
 
     def unzip_data(self):
@@ -662,12 +630,12 @@ if __name__ == '__main__':
     #     signal_freq=50, window_size_sec=4
     # ).run()
 
-    # KFall(
-    #     raw_folder='/mnt/data_drive/projects/raw datasets/KFall/',
-    #     name='KFall',
-    #     destination_folder='/mnt/data_drive/projects/npy_data_seq',
-    #     signal_freq=50, window_size_sec=4
-    # ).run()
+    KFall(
+        raw_folder='/mnt/data_drive/projects/raw datasets/KFall/',
+        name='KFall',
+        destination_folder='/mnt/data_drive/projects/npy_data_seq',
+        signal_freq=50, window_size_sec=4
+    ).run()
 
     # UCISmartphone(
     #     raw_folder='/mnt/data_drive/projects/raw datasets/uci-smartphone-based-recognition-of-human-activities/RawData/',
@@ -683,12 +651,12 @@ if __name__ == '__main__':
     #     signal_freq=50, window_size_sec=4
     # ).run()
 
-    CMDFall(
-        raw_folder='/mnt/data_drive/projects/raw datasets/CMDFall/',
-        name='CMDFall',
-        destination_folder='/mnt/data_drive/projects/npy_data_seq',
-        signal_freq=50, window_size_sec=4
-    ).run()
+    # CMDFall(
+    #     raw_folder='/mnt/data_drive/projects/raw datasets/CMDFall/',
+    #     name='CMDFall',
+    #     destination_folder='/mnt/data_drive/projects/npy_data_seq',
+    #     signal_freq=50, window_size_sec=4
+    # ).run()
 
     # unlike the others, SFI is written as parquet and no sliding window because it is the test set
     # SFI(
