@@ -176,8 +176,13 @@ class URFall(QuickProcess):
 class KFall(QuickProcess):
     FALL_TASK_ID = set('%02d' % n for n in range(20, 35))
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, max_window_per_fall: int = 3, *args, **kwargs):
+        """
+        Args:
+            max_window_per_fall: max number of windows to take for each fall event (as fall events are short)
+        """
         super().__init__(*args, **kwargs)
+        self.max_window_per_fall = max_window_per_fall
         self.raw_data_folder = f'{self.raw_folder}/sensor_data'
         self.raw_label_folder = f'{self.raw_folder}/label_data'
         # minimum step size between fall windows
@@ -235,7 +240,7 @@ class KFall(QuickProcess):
 
     def _get_fall_window(self, data_df: pd.DataFrame, label_row: pd.Series) -> np.ndarray:
         """
-        Turn a fall session DF into a numpy array of 1 fall window
+        Turn a fall session DF into a numpy array of fall windows
 
         Args:
             data_df: data df
@@ -268,7 +273,8 @@ class KFall(QuickProcess):
 
         windows = shifting_window(
             data_arr,
-            window_size=self.window_size_row, max_num_windows=3, min_step_size=self.min_fall_window_step_size,
+            window_size=self.window_size_row, max_num_windows=self.max_window_per_fall,
+            min_step_size=self.min_fall_window_step_size,
             start_idx=fall_onset_idx, end_idx=fall_impact_idx + self.expand_after_impact
         )
         return windows
