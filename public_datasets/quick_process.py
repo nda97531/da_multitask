@@ -176,17 +176,22 @@ class URFall(QuickProcess):
 class KFall(QuickProcess):
     FALL_TASK_ID = set('%02d' % n for n in range(20, 35))
 
-    def __init__(self, max_window_per_fall: int = 3, *args, **kwargs):
+    def __init__(self, max_window_per_fall: int = 3, min_fall_window_step: float = 0.5,
+                 *args, **kwargs):
         """
         Args:
             max_window_per_fall: max number of windows to take for each fall event (as fall events are short)
+            min_fall_window_step: (unit: second) minimum step size between fall windows
         """
         super().__init__(*args, **kwargs)
         self.max_window_per_fall = max_window_per_fall
         self.raw_data_folder = f'{self.raw_folder}/sensor_data'
         self.raw_label_folder = f'{self.raw_folder}/label_data'
         # minimum step size between fall windows
-        self.min_fall_window_step_size = self.window_size_row // 2
+        self.min_fall_window_step_size = min(
+            int(min_fall_window_step * self.signal_freq * 1000),
+            self.window_size_row // 2
+        )
         # make sure at least 1s of post-fall impact event is included in the window
         self.expand_after_impact = int(self.signal_freq * 1000)
 
