@@ -1,12 +1,11 @@
-import os
 from glob import glob
 import torch as tr
 import torch.nn as nn
 import pandas as pd
+import polars as pl
 from sklearn.metrics import classification_report
 from tqdm import tqdm
-
-from utils.sliding_window import sliding_window
+from da_multitask.utils.sliding_window import sliding_window
 from da_multitask.networks.backbone_tcn import TCN
 from da_multitask.networks.classifier import MultiFCClassifiers, FCClassifier
 from da_multitask.networks.complete_model import CompleteModel
@@ -38,7 +37,7 @@ def load_single_task_model(weight_path: str, device: str = 'cpu') -> nn.Module:
     model = CompleteModel(backbone=backbone, classifier=classifier).to(device)
 
     # load weight
-    state_dict = tr.load(weight_path)
+    state_dict = tr.load(weight_path, map_location=device)
     model.load_state_dict(state_dict)
     return model
 
@@ -76,26 +75,15 @@ def load_multitask_model(weight_path: str, n_classes: list, device: str = 'cpu')
     return model
 
 
-def get_windows_from_df(file: str) -> tr.Tensor:
-    df = pd.read_parquet(file)
-    arr = df[['acc_x', 'acc_y', 'acc_z']].to_numpy()
+def get_windows_from_df(file: str) -> tuple:
+    df = pl.read_parquet(file)
+    arr = df.select(['waist_acc_x(m/s^2)', 'waist_acc_y(m/s^2)', 'waist_acc_z(m/s^2)', 'label']).to_numpy()
     windows = sliding_window(arr, window_size=200, step_size=100)
     windows = tr.from_numpy(windows).float()
-    return windows
-
-
-def get_label_from_file_path(path: str) -> int:
-    """
-
-    Args:
-        path:
-
-    Returns:
-
-    """
-    label = path.split(os.sep)[-2]
-    label = int(label == 'Falls')
-    return label
+    data_windows = windows[:, :, :-1]
+    label_windows = windows[:, :, -1].int()
+    label_session = int(label_windows.any())
+    return data_windows, label_session
 
 
 def test_single_task(model: nn.Module, list_data_files: list, device: str = 'cpu'):
@@ -105,12 +93,11 @@ def test_single_task(model: nn.Module, list_data_files: list, device: str = 'cpu
     y_pred = []
     with tr.no_grad():
         for file in tqdm(list_data_files, ncols=0):
-            data = get_windows_from_df(file).to(device)
-            label = get_label_from_file_path(file)
+            data, label = get_windows_from_df(file)
 
             # predict fall (positive-1) if there's any positive window
-            # pred = model(data).argmax(1).any().item()
-            pred = (model(data).squeeze(1) > 0.5).any().item()
+            pred = model(data.to(device)).squeeze(1)
+            pred = (pred > 0.5).any().item()
 
             y_true.append(label)
             y_pred.append(pred)
@@ -126,17 +113,15 @@ def test_multitask(model: nn.Module, list_data_files: list, device: str = 'cpu')
     y_pred = []
     with tr.no_grad():
         for file in tqdm(list_data_files, ncols=0):
-            data = get_windows_from_df(file).to(device)
-            label = get_label_from_file_path(file)
+            data, label = get_windows_from_df(file)
 
             # only use the first task (index 0)
             pred = model(
-                data,
+                data.to(device),
                 classifier_kwargs={'mask': tr.zeros(len(data), dtype=tr.int)}
-            )[0]
+            )[0].squeeze(1)
             # predict fall (positive-1) if there's any positive window
-            # pred = pred.argmax(1).any().item()
-            pred = (tr.sigmoid(pred.squeeze(1)) > 0.5).any().item()
+            pred = (tr.sigmoid(pred) > 0.5).any().item()
 
             y_true.append(label)
             y_pred.append(pred)
@@ -146,11 +131,12 @@ def test_multitask(model: nn.Module, list_data_files: list, device: str = 'cpu')
 
 
 if __name__ == '__main__':
-    device = 'cuda:1'
+    device = 'cpu'
 
-    list_data_files = glob('/home/ducanh/projects/datasets/SFU/parquet/sub*/*/*.parquet')
+    list_data_files = glob('/mnt/data_drive/projects/processed_parquet/SFU-IMU/inertia/subject_*/*.parquet')
     # weight_path_pattern = 'draft/{exp_id}/run_{run_id}/{task}_task_last_epoch.pth'
-    weight_path_pattern = 'draft/result_exp10/{exp_id}/run_{run_id}/{task}_task.pth'
+    weight_path_pattern = ('/mnt/data_drive/projects/UCD02 - Multitask fall det/da_multitask/result'
+                           '/result_exp10/{exp_id}/run_{run_id}/{task}_task.pth')
 
     # key: exp id; value: a dict of {precision, recall, f1score}
     all_results = {}
@@ -176,11 +162,11 @@ if __name__ == '__main__':
                 device=device
             )
             exp_results.append(result['1'])
-        
+
         assert exp_id not in all_results
         all_results[exp_id] = pd.DataFrame(exp_results).mean(axis=0)
     # endregion
-    
+
     # region: test multi task
     num_classes = {
         'g2.1': [1, 21],

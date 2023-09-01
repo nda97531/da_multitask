@@ -8,10 +8,9 @@ from collections import defaultdict
 from tqdm import tqdm
 import zipfile
 
-from public_datasets.constant import G_TO_MS2
-from utils.pd_dataframe import interpolate_numeric_df, write_df_file
-from utils.sliding_window import sliding_window, shifting_window
-from utils.time import TimeThis
+from da_multitask.public_datasets.constant import G_TO_MS2
+from da_multitask.utils.pd_dataframe import interpolate_numeric_df, write_df_file
+from da_multitask.utils.sliding_window import sliding_window, shifting_window
 
 
 class QuickProcess:

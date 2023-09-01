@@ -1,13 +1,10 @@
 import numpy as np
-import os
 from glob import glob
 import torch as tr
 import torch.nn as nn
 import pandas as pd
-from sklearn.metrics import classification_report
 from tqdm import tqdm
 
-from utils.sliding_window import sliding_window
 from da_multitask.networks.backbone_tcn import TCN
 from da_multitask.networks.classifier import MultiFCClassifiers, FCClassifier
 from da_multitask.networks.complete_model import CompleteModel
