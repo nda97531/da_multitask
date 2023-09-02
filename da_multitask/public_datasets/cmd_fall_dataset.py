@@ -491,12 +491,12 @@ if __name__ == '__main__':
         data_arr = np.concatenate([fake_ts, data_arr], axis=-1)
 
         if label == npy_process.FALL_LABEL:
-            save_path = f'{npy_dir_nonfall}/D1/{name}_fall.npy'
+            save_path = f'{npy_dir_fall}/{name}_fall/0.npy'
             os.makedirs(os.path.split(save_path)[0], exist_ok=True)
             logger.info(f'Save array {data_arr.shape} to {save_path}')
             np.save(save_path, data_arr)
         else:
-            save_path = f'{npy_dir_nonfall}/D2/{name}_{label}.npy'
+            save_path = f'{npy_dir_nonfall}/{name}_{label}/0.npy'
             os.makedirs(os.path.split(save_path)[0], exist_ok=True)
             logger.info(f'Save array {data_arr.shape} to {save_path}')
             np.save(save_path, data_arr)

@@ -9,6 +9,7 @@ from da_multitask.utils.sliding_window import sliding_window
 from da_multitask.networks.backbone_tcn import TCN
 from da_multitask.networks.classifier import MultiFCClassifiers, FCClassifier
 from da_multitask.networks.complete_model import CompleteModel
+from da_multitask.public_datasets.constant import G_TO_MS2
 
 
 def load_single_task_model(weight_path: str, device: str = 'cpu') -> nn.Module:
@@ -78,6 +79,8 @@ def load_multitask_model(weight_path: str, n_classes: list, device: str = 'cpu')
 def get_windows_from_df(file: str) -> tuple:
     df = pl.read_parquet(file)
     arr = df.select(['waist_acc_x(m/s^2)', 'waist_acc_y(m/s^2)', 'waist_acc_z(m/s^2)', 'label']).to_numpy()
+    arr[:, :3] /= G_TO_MS2
+
     windows = sliding_window(arr, window_size=200, step_size=100)
     windows = tr.from_numpy(windows).float()
     data_windows = windows[:, :, :-1]
@@ -97,7 +100,7 @@ def test_single_task(model: nn.Module, list_data_files: list, device: str = 'cpu
 
             # predict fall (positive-1) if there's any positive window
             pred = model(data.to(device)).squeeze(1)
-            pred = (pred > 0.5).any().item()
+            pred = (pred > 0).any().item()
 
             y_true.append(label)
             y_pred.append(pred)
@@ -121,7 +124,7 @@ def test_multitask(model: nn.Module, list_data_files: list, device: str = 'cpu')
                 classifier_kwargs={'mask': tr.zeros(len(data), dtype=tr.int)}
             )[0].squeeze(1)
             # predict fall (positive-1) if there's any positive window
-            pred = (tr.sigmoid(pred) > 0.5).any().item()
+            pred = (pred > 0).any().item()
 
             y_true.append(label)
             y_pred.append(pred)
@@ -131,11 +134,10 @@ def test_multitask(model: nn.Module, list_data_files: list, device: str = 'cpu')
 
 
 if __name__ == '__main__':
-    device = 'cpu'
+    device = 'cuda:0'
 
-    list_data_files = glob('/mnt/data_drive/projects/processed_parquet/SFU-IMU/inertia/subject_*/*.parquet')
-    # weight_path_pattern = 'draft/{exp_id}/run_{run_id}/{task}_task_last_epoch.pth'
-    weight_path_pattern = ('/mnt/data_drive/projects/UCD02 - Multitask fall det/da_multitask/result'
+    list_data_files = glob('/home/ducanh/parquet_datasets/SFU-IMU/inertia/subject_*/*.parquet')
+    weight_path_pattern = ('/home/ducanh/projects/UCD02 - Multitask Fall det/da_multitask/result'
                            '/result_exp10/{exp_id}/run_{run_id}/{task}_task.pth')
 
     # key: exp id; value: a dict of {precision, recall, f1score}
