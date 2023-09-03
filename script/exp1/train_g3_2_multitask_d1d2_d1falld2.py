@@ -63,7 +63,7 @@ def load_data(folder: str):
     # append D1train into train_dict(s)
     train_dict_1[0].append(d1_windows_train[d1_labels_train == 0])
     train_dict_1[1].append(d1_windows_train[d1_labels_train == 1])
-    train_dict_2['nonfall'].append(d1_windows_train[d1_labels_train == 0])
+    train_dict_2['fall'].append(d1_windows_train[d1_labels_train == 1])
 
     # append D1valid into valid dict
     valid_dict[0].append(d1_windows_valid[d1_labels_valid == 0])
