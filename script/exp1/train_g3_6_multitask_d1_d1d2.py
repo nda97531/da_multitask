@@ -70,7 +70,7 @@ def load_data(folder: str):
 
     # return result
     train_dict_1 = {key: np.concatenate(value) for key, value in train_dict_1.items()}
-    train_dict_2 = {key: np.concatenate(value) for key, value in train_dict_1.items()}
+    train_dict_2 = {key: np.concatenate(value) for key, value in train_dict_2.items()}
     valid_dict = {key: np.concatenate(value) for key, value in valid_dict.items()}
     return [train_dict_1, train_dict_2], valid_dict
 
