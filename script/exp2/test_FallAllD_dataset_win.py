@@ -73,7 +73,7 @@ def load_multitask_model(weight_path: str, n_classes: list, device: str = 'cpu')
     model = CompleteModel(backbone=backbone, classifier=classifier).to(device)
 
     # load weight
-    state_dict = tr.load(weight_path)
+    state_dict = tr.load(weight_path, map_location=device)
     model.load_state_dict(state_dict)
     return model
 
@@ -115,8 +115,14 @@ def cal_score(y_true: np.ndarray, y_pred_prob: np.ndarray):
         a dict with keys are metric names
     """
     # precision, recall, f1
+    y_true = y_true.astype(int)
     y_pred = (y_pred_prob > 0.5).astype(int)
     result = metrics.classification_report(y_true, y_pred, output_dict=True)['1']
+
+    # specificity
+    true_neg = ((y_pred == 0) & (y_true == 0)).sum()
+    false_pos = ((y_pred == 1) & (y_true == 0)).sum()
+    result['specificity'] = true_neg / (true_neg + false_pos)
 
     # auc-roc
     result['auc-roc'] = metrics.roc_auc_score(y_true, y_pred_prob)
@@ -180,7 +186,13 @@ def test_multitask(model: nn.Module, list_data_files: list, device: str = 'cpu')
 
 
 if __name__ == '__main__':
-    device = 'cuda:0'
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--device', '-d', type=str, default='cuda:0')
+    args = parser.parse_args()
+
+    device = args.device
 
     list_data_files = glob('/home/ducanh/parquet_datasets/FallAllD/inertia/subject_*/*waist*.parquet')
     weight_path_pattern = ('/home/ducanh/projects/UCD02 - Multitask Fall det/da_multitask/log'
@@ -191,7 +203,8 @@ if __name__ == '__main__':
 
     # region: test single task
     exps = [
-        'g1_1_spatialdr',
+        'g1_1',
+        'g1_2',
     ]
     for exp_id in exps:
         print(f'------------------------------\ntesting exp {exp_id}')
@@ -216,14 +229,14 @@ if __name__ == '__main__':
 
     # region: test multi task
     num_classes = {
-        # 'g2.1': [1, 21],
-        # 'g3.1': [1, 23],
-        # 'g3.2': [1, 22],
-        # 'g3.3': [1, 21],
-        # 'g3.4': [1, 22],
-        # 'g3.5': [1, 1],
-        # 'g3.6': [1, 1],
-        # 'g3.7': [1, 23],
+        'g2_1': [1, 12],
+        'g3_1': [1, 14],
+        'g3_2': [1, 13],
+        'g3_3': [1, 12],
+        'g3_4': [1, 13],
+        'g3_5': [1, 1],
+        'g3_6': [1, 1],
+        'g3_7': [1, 14],
     }
     for exp_id, num_class in num_classes.items():
         print(f'------------------------------\ntesting exp {exp_id}')

@@ -1,13 +1,16 @@
-import numpy as np
 from glob import glob
+import numpy as np
 import torch as tr
 import torch.nn as nn
 import pandas as pd
+import polars as pl
+from sklearn import metrics
 from tqdm import tqdm
-
+from da_multitask.utils.sliding_window import sliding_window, shifting_window
 from da_multitask.networks.backbone_tcn import TCN
 from da_multitask.networks.classifier import MultiFCClassifiers, FCClassifier
 from da_multitask.networks.complete_model import CompleteModel
+from da_multitask.public_datasets.constant import G_TO_MS2
 
 
 def load_single_task_model(weight_path: str, device: str = 'cpu') -> nn.Module:
@@ -31,12 +34,12 @@ def load_single_task_model(weight_path: str, device: str = 'cpu') -> nn.Module:
     )
     classifier = FCClassifier(
         n_features=128,
-        n_classes=2
+        n_classes=1
     )
     model = CompleteModel(backbone=backbone, classifier=classifier).to(device)
 
     # load weight
-    state_dict = tr.load(weight_path)
+    state_dict = tr.load(weight_path, map_location=device)
     model.load_state_dict(state_dict)
     return model
 
@@ -69,48 +72,64 @@ def load_multitask_model(weight_path: str, n_classes: list, device: str = 'cpu')
     model = CompleteModel(backbone=backbone, classifier=classifier).to(device)
 
     # load weight
-    state_dict = tr.load(weight_path)
+    state_dict = tr.load(weight_path, map_location=device)
     model.load_state_dict(state_dict)
     return model
 
 
-def get_windows_from_df(file: str) -> tr.Tensor:
-    df = pd.read_parquet(file)
-    arr = df[['acc_x', 'acc_y', 'acc_z']].to_numpy()
-    windows = arr[:len(arr) // 200 * 200]
-    windows = windows.reshape([-1, 200, 3])
-    windows = tr.from_numpy(windows).float()
-    return windows
+def get_windows_from_df(file: str) -> tuple:
+    # this dataset doesn't have fall activity
+    df = pl.read_parquet(file)
+    arr = df.select(['waist_acc_x(m/s^2)', 'waist_acc_y(m/s^2)', 'waist_acc_z(m/s^2)']).to_numpy()
+    arr /= G_TO_MS2
+
+    data_windows = sliding_window(arr, window_size=200, step_size=200)
+    data_windows = data_windows.astype(np.float32) 
+    return tr.from_numpy(data_windows)
 
 
-def test_single_task(model: nn.Module, list_data_files: list, window_size_sec: float, device: str = 'cpu'):
+def cal_score(y_pred_prob: np.ndarray):
+    """
+    Because the RealWorld dataset doesn't have any fall activity, all y_trues are 0.
+    Calculate metrics: specificity
+
+    Args:
+        y_pred_prob: 1d array of prediction probability
+
+    Returns:
+        a dict with keys are metric names
+    """
+    # fall: True; non-fall: False
+    y_pred = y_pred_prob > 0.5
+    
+    # specificity
+    true_neg = (~y_pred).sum()
+    specificity = true_neg / len(y_pred)
+
+    result = {'specificity': specificity, 'support': len(y_pred)}
+    print(result)
+    return result
+
+
+def test_single_task(model: nn.Module, list_data_files: list, device: str = 'cpu'):
     model = model.eval().to(device)
-
-    num_detected_falls = 0
-    num_windows = 0
+    y_pred_prob = []
     with tr.no_grad():
         for file in tqdm(list_data_files, ncols=0):
             data = get_windows_from_df(file).to(device)
 
-            # predict fall (positive-1) if there's any positive window
-            pred = model(data)
-            pred = pred.argmax(1)
+            pred = model(data).squeeze(1)
+            pred = tr.sigmoid(pred).cpu()
+            y_pred_prob.append(pred)
 
-            num_windows += len(pred)
-            num_detected_falls += pred.sum().item()
-
-    total_hours = (num_windows * window_size_sec) / 3600
-    false_alarm_rate = num_detected_falls / total_hours  # false alarm / hour
-
-    print(false_alarm_rate)
-    return false_alarm_rate
+    y_pred_prob = np.concatenate(y_pred_prob)
+    result = cal_score(y_pred_prob)
+    return result
 
 
-def test_multitask(model: nn.Module, list_data_files: list, window_size_sec: float, device: str = 'cpu'):
+def test_multitask(model: nn.Module, list_data_files: list, device: str = 'cpu'):
     model = model.eval().to(device)
-
-    num_detected_falls = 0
-    num_windows = 0
+    y_pred_prob = []
     with tr.no_grad():
         for file in tqdm(list_data_files, ncols=0):
             data = get_windows_from_df(file).to(device)
@@ -119,33 +138,35 @@ def test_multitask(model: nn.Module, list_data_files: list, window_size_sec: flo
             pred = model(
                 data,
                 classifier_kwargs={'mask': tr.zeros(len(data), dtype=tr.int)}
-            )[0]
-            # predict fall (positive-1) if there's any positive window
-            pred = pred.argmax(1)
+            )[0].squeeze(1)
+            pred = tr.sigmoid(pred).cpu()
+            y_pred_prob.append(pred)
 
-            num_windows += len(pred)
-            num_detected_falls += pred.sum().item()
-
-    total_hours = (num_windows * window_size_sec) / 3600
-    false_alarm_rate = num_detected_falls / total_hours  # false alarm / hour
-    print(false_alarm_rate)
-    return false_alarm_rate
+    y_pred_prob = np.concatenate(y_pred_prob)
+    result = cal_score(y_pred_prob)
+    return result
 
 
 if __name__ == '__main__':
-    device = 'cuda:1'
+    import argparse
 
-    list_data_files = glob('/home/ducanh/projects/datasets/RealWorld/parquet/proband*/*.parquet')
-    # weight_path_pattern = 'draft/{exp_id}/run_{run_id}/{task}_task_last_epoch.pth'
-    weight_path_pattern = 'draft/result_exp9/{exp_id}/run_{run_id}/{task}_task.pth'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--device', '-d', type=str, default='cuda:0')
+    args = parser.parse_args()
+
+    device = args.device
+
+    list_data_files = glob('/home/ducanh/parquet_datasets/RealWorld/inertia/subject_*/*.parquet')
+    weight_path_pattern = ('/home/ducanh/projects/UCD02 - Multitask Fall det/da_multitask/log'
+                           '/{exp_id}/run_{run_id}/{task}_task.pth')
 
     # key: exp id; value: a dict of {precision, recall, f1score}
     all_results = {}
 
     # region: test single task
     exps = [
-        'g1.1',
-        'g1.2'
+        'g1_1',
+        'g1_2'
     ]
     for exp_id in exps:
         print(f'------------------------------\ntesting exp {exp_id}')
@@ -159,25 +180,28 @@ if __name__ == '__main__':
 
             result = test_single_task(
                 model=model,
-                window_size_sec=4,
                 list_data_files=list_data_files,
                 device=device
             )
             exp_results.append(result)
         
         assert exp_id not in all_results
-        all_results[exp_id] = np.mean(exp_results)
+        # result = pd.DataFrame(exp_results).mean(axis=0)
+        result = pd.DataFrame(exp_results)
+        result = result.iloc[np.argmax(result['specificity'])]
+        all_results[exp_id] = result
     # endregion
     
     # region: test multi task
     num_classes = {
-        'g2.1': [2, 21],
-        # 'g2.2': [2, 11],
-        # 'g2.3': [2, 21, 11],
-        # 'g3.1': [2, 21],
-        # 'g3.2': [2, 23],
-        'g3.3': [2, 22],
-        'g3.4': [2, 2]
+        'g2_1': [1, 12],
+        'g3_1': [1, 14],
+        'g3_2': [1, 13],
+        'g3_3': [1, 12],
+        'g3_4': [1, 13],
+        'g3_5': [1, 1],
+        'g3_6': [1, 1],
+        'g3_7': [1, 14],
     }
     for exp_id, num_class in num_classes.items():
         print(f'------------------------------\ntesting exp {exp_id}')
@@ -191,15 +215,17 @@ if __name__ == '__main__':
             )
             result = test_multitask(
                 model=model,
-                window_size_sec=4,
                 list_data_files=list_data_files,
                 device=device
             )
             exp_results.append(result)
 
         assert exp_id not in all_results
-        all_results[exp_id] = np.mean(exp_results)
+        # result = pd.DataFrame(exp_results).mean(axis=0)
+        result = pd.DataFrame(exp_results)
+        result = result.iloc[np.argmax(result['specificity'])]
+        all_results[exp_id] = result
     # endregion
 
-    print('result (false alarm per hour): ')
+    all_results = pd.DataFrame(all_results).transpose().round(decimals=4)
     print(all_results)
