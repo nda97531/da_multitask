@@ -82,3 +82,28 @@ def interval_intersection(intervals: List[List[List[int]]]) -> List[List[int]]:
         pos_indices[np.argmin(endpoints)] += 1
 
     return result
+
+
+def interp_resample(arr: np.ndarray, old_freq: float, new_freq: float) -> np.ndarray:
+    """
+    Resample by linear interpolation for every channel in the data array.
+
+    Args:
+        arr: data array, shape [length, channel]
+        old_freq: old sampling rate
+        new_freq: new sampling rate
+
+    Returns:
+        new data array, shape [new length, channel]
+    """
+    assert len(arr.shape) == 2, 'Only support 2D array'
+
+    data_duration = len(arr) / old_freq
+    new_arr = []
+    for i in range(arr.shape[1]):
+        old_ts = np.arange(0, data_duration, 1 / old_freq)
+        new_ts = np.arange(0, data_duration, 1 / new_freq)
+        new_channel = np.interp(x=new_ts, xp=old_ts, fp=arr[:, i])
+        new_arr.append(new_channel)
+    new_arr = np.stack(new_arr, axis=-1)
+    return new_arr

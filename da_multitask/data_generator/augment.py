@@ -95,7 +95,7 @@ class ComposeAugmenters(Augmenter):
 
 
 class Rotate(Augmenter):
-    def __init__(self, p: float, angle_range: Union[list, tuple, float] = None) -> None:
+    def __init__(self, p: float = 1, angle_range: Union[list, tuple, float] = 180) -> None:
         """
         Rotate tri-axial data in a random axis.
 

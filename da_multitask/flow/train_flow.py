@@ -4,6 +4,7 @@ from typing import List, Union, Tuple
 import torch as tr
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from da_multitask.flow.flow_functions import auto_classification_loss, cal_f1_score
 from da_multitask.flow.torch_callbacks import TorchCallback, CallbackAction
@@ -191,10 +192,18 @@ class TrainFlow:
         print(f'Valid: {self.valid_log[-1]}')
 
     def run_callbacks(self, epoch: int) -> List[CallbackAction]:
-        actions = [
-            callback.on_epoch_end(epoch, self.model, self.train_log[-1]['loss'], self.valid_log[-1]['loss'])
-            for callback in self.callbacks
-        ]
+        actions = []
+
+        for callback in self.callbacks:
+            if isinstance(callback, TorchCallback):
+                actions.append(callback.on_epoch_end(epoch, self.model,
+                                                     self.train_log[-1]['loss'],
+                                                     self.valid_log[-1]['loss']))
+            elif isinstance(callback, ReduceLROnPlateau):
+                callback.step(self.valid_log[-1]['loss'])
+            else:
+                raise ValueError(f'Unsupported callback: {type(callback)}')
+
         return actions
 
     def run(self, train_loader: Union[DataLoader, List[DataLoader]], valid_loader: Union[DataLoader, List[DataLoader]],
